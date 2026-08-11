@@ -1,0 +1,39 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+---
+Language: Cpp
+
+AccessModifierOffset: -4
+AlignArrayOfStructures: Left
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+AlignOperands: Align
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLambdasOnASingleLine: false
+AllowShortLoopsOnASingleLine: true
+BreakAfterAttributes: Never
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: AfterColon
+BreakInheritanceList: AfterColon
+BreakTemplateDeclarations: Yes
+DerivePointerAlignment: false
+EmptyLineBeforeAccessModifier: Always
+IncludeBlocks: Preserve
+IndentCaseLabels: true
+IndentExternBlock: true
+IndentPPDirectives: AfterHash
+PointerAlignment: Left
+PPIndentWidth: 2
+QualifierAlignment: Left
+SeparateDefinitionBlocks: Always
+
+DisableFormat: false

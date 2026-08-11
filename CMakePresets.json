@@ -1,0 +1,43 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "config",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+                "CMAKE_CXX_STANDARD": "23",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/"
+            }
+        },
+        {
+            "name": "config-ninja",
+            "inherits": "config",
+            "generator": "Ninja",
+            "hidden": true
+        },
+        {
+            "name": "config-ninja-debug",
+            "inherits": "config-ninja",
+            "displayName": "Ninja Debug Config",
+            "description": "Configuration for Ninja generator debug builds.",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "build-ninja-debug",
+            "displayName": "Build Ninja Debug",
+            "description": "Builds the Dart compiler front-end in debug mode with Ninja.",
+            "configurePreset": "config-ninja-debug",
+            "targets": [
+                "dart-front-end"
+            ]
+        }
+    ]
+}
