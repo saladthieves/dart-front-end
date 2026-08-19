@@ -1,11 +1,10 @@
-set(TARGET common)
+add_library(common)
 
-add_library(${TARGET})
-
-target_sources(${TARGET}
+target_sources(common
     PRIVATE
-        log.cpp
-    
+        errors.cpp
+        
     PUBLIC
         FILE_SET HEADERS
+        BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/.."
 )

@@ -16,7 +16,7 @@
         {
             "type": "shell",
             "label": "build-ninja-debug",
-            "detail": "Builds the dart-front-end target with Ninja in Debug mode.",
+            "detail": "Builds the dart_front_end target with Ninja in Debug mode.",
             "group": "build",
             "command": "cmake",
             "args": [
@@ -29,7 +29,7 @@
         {
             "type": "shell",
             "label": "build-ninja-debug-clean",
-            "detail": "Cleans and rebuilds the dart-front-end target with Ninja in Debug mode.",
+            "detail": "Cleans and rebuilds the dart_front_end target with Ninja in Debug mode.",
             "group": "build",
             "dependsOn": [
                 "clean",
@@ -49,7 +49,7 @@
                 "-rf",
                 "build/CMakeCache.txt",
                 "build/CMakeFiles",
-                "build/dart-front-end"
+                "build/dart_front_end"
             ]
         }
     ]

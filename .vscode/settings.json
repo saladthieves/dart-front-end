@@ -1,7 +1,11 @@
 {
-    "binaryName": "dart-front-end",
-    "cSpell.words": [],
+    "binaryName": "dart_front_end",
+    "cSpell.words": [
+        "BACKPING",
+        "Interner"
+    ],
     "better-todo-tree.highlights.defaultHighlight": {
         "background": "#12520a"
-    }
+    },
+    "workbench.experimental.modernUI": false
 }

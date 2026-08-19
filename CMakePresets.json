@@ -16,7 +16,7 @@
         {
             "name": "config-ninja",
             "inherits": "config",
-            "generator": "Ninja",
+            "generator": "Unix Makefiles",
             "hidden": true
         },
         {
@@ -36,7 +36,7 @@
             "description": "Builds the Dart compiler front-end in debug mode with Ninja.",
             "configurePreset": "config-ninja-debug",
             "targets": [
-                "dart-front-end"
+                "dart_front_end"
             ]
         }
     ]
