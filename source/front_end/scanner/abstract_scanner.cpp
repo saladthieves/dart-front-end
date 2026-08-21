@@ -1,8 +1,20 @@
 #include "abstract_scanner.hpp"
+#include "internal_utils.hpp"
 
+#include "common/errors.hpp"
+#include "messages/diagnostic_codes.hpp"
+#include "token/begin_token.hpp"
 #include "token/characters.hpp"
+#include "token/comment_token.hpp"
 #include "token/error_token.hpp"
+#include "token/synthetic_token.hpp"
 #include "token/token_constants.hpp"
+#include "token/token_factory.hpp"
+#include "token/token_impl.hpp"
+#include "token/token_types.hpp"
+
+#include <format>
+#include <stdexcept>
 
 namespace dart {
 namespace front_end {
@@ -12,13 +24,24 @@ using namespace token::chars;
 using namespace token::constants;
 
 using Int = Scanner<>::Int;
-using token::Token;
+using token::BeginToken;
+using token::ErrorToken;
 using token::NonAsciiIdentifierToken;
+using token::Token;
+using namespace token::type;
 
 using token::buildUnexpectedCharacterToken;
 } // namespace
 
 // AbstractScanner
+Int AbstractScanner::advanceAfterError() {
+    if (atEndOfFile()) {
+        return $EOF;
+    } else {
+        return advance(); // Proceed forward after error
+    }
+}
+
 void AbstractScanner::setConfiguration(const ScannerConfiguration* config) {
     if (config != nullptr) {
         enableTripleShift = config->enableTripleShift;
@@ -26,9 +49,22 @@ void AbstractScanner::setConfiguration(const ScannerConfiguration* config) {
     }
 }
 
-const token::Token* AbstractScanner::tokenize() {
-    while (!atEndOfFile()) {}
-    return nullptr;
+const Token* AbstractScanner::tokenize() {
+    while (!atEndOfFile()) {
+        Int next = scanHeaderLookingForLanguageVersion(advance());
+        while (next != $EOF) {
+            next = bigSwitch(next);
+        }
+
+        // Make sure we're at the end of file and append an EOF token.
+        assert::assert(atEndOfFile());
+        appendEofToken();
+    }
+
+    // Pretend there's an empty line at the end of the file
+    lineStarts->add(getStringOffset() + 1);
+
+    return getFirstToken();
 }
 
 Int AbstractScanner::scanHeaderLookingForLanguageVersion(Int next) {
@@ -49,14 +85,41 @@ Int AbstractScanner::scanHeaderLookingForLanguageVersion(Int next) {
 }
 
 Int AbstractScanner::bigHeaderSwitch(Int next) {
-    if (next != $SLASH) return bigSwitch(next);
+    if (next != $SLASH) {
+        return bigSwitch(next);
+    }
+
+    beginToken();           // A token begins at the current character ('/')
+    if (peek() != $SLASH) { // Not a single line comment, but maybe another kind
+        return tokenizeSlashOrComment(next);
+    } else { // Possibly a language version comment '// @dart = MAJOR.MINOR'
+        return tokenizeLanguageVersionOrSingleLineComment(next);
+    }
 }
 
 Int AbstractScanner::bigSwitch(Int next) {
     beginToken(); // A new token starts at `getStringOffset()` | `tokenStart`
+
+    // Skip space characters
     if (next == $SPACE || next == $TAB || next == $CR) {
         return skipSpaces();
     }
+
+    // A linefeed / newline character (\n). Record its offset in `lineStarts`
+    if (next == $LF) {
+        lineStarts->add(getStringOffset() + 1); // +1, new line starts after LF
+        return skipSpaces(); // Skip any white spaces at the start of line
+    }
+
+    const Int nextLower = next | 0x20;
+    // TODO: Find out why next isn't used
+    if ($a <= nextLower && nextLower <= $z) {
+        if (next == $r) { // A possible raw string, keyword or identifier
+            return tokenizeRawStringKeywordOrIdentifier(next);
+        }
+    }
+
+    /******* STOP HERE AND BEGIN TESTING ******/
 
     // The character cannot be determined
     next = currentAsUnicode(next);
@@ -64,14 +127,783 @@ Int AbstractScanner::bigSwitch(Int next) {
     return unexpected(next);
 }
 
-Int AbstractScanner::unexpected(Int character) {
-    auto* errorToken = buildUnexpectedCharacterToken(character, tokenStart);
+Int AbstractScanner::tokenizeSlashOrComment(Int next) {
+    std::size_t start = getScanOffset(); // Current position of `next` or '/'
 
-    if (dynamic_cast<NonAsciiIdentifierToken*>(errorToken)) {
-        
+    next = advance();                    // Move past the starting '/'
+    if (next == $STAR) {                 // A multiline comment /* ..... */
+        return tokenizeMultiLineComment(next, start);
+    } else if (next == $SLASH) {         // A single line comment //
+        return tokenizeSingleLineComment(next, start);
+    } else if (next == $EQ) {            // A compound assignment operator '/='
+        appendPrecedenceToken(&token::type::SLASH_EQ);
+        return advance();
+    } else { // A normal '/' operator
+        appendPrecedenceToken(&token::type::SLASH);
+        return next;
     }
 }
 
+void AbstractScanner::tokenizeSingleLineCommentAppend(
+    bool asciiOnly, std::size_t start, bool isDartDoc
+) {
+    if (!asciiOnly) handleUnicode(start);
+    if (isDartDoc) { // A single line '///' Dart doc comment
+        appendDartDoc(start, &token::type::SINGLE_LINE_COMMENT, asciiOnly);
+    } else {         // A single line '//' normal comment
+        appendComment(start, &token::type::SINGLE_LINE_COMMENT, asciiOnly);
+    }
+}
+
+Int AbstractScanner::tokenizeMultiLineComment(Int next, std::size_t start) {
+    bool asciiOnlyComment = true;
+    bool asciiOnlyLines = true;
+    std::size_t unicodeStart = start;
+    dart::u8 nesting = 1;
+
+    next = advance();                     // Move past the '*' in '/*'
+    const bool isDartDoc = next == $STAR; // A Dart doc comment with '/**'
+
+    while (true) {
+        // We hit an EOF before comment ending - it's an unterminated comment.
+        if (next == $EOF) {
+            if (!asciiOnlyLines) {
+                handleUnicode(unicodeStart);
+            }
+
+            // Report the unterminated comment token as an error.
+            prependErrorToken(new token::UnterminatedToken(
+                messages::codes::diag::unterminatedComment(), tokenStart,
+                getStringOffset()
+            ));
+            advanceAfterError();
+            break; // Exit loop
+        }
+
+        if (next == $STAR) {  // A '/**' multiline | Dart doc comment.
+            next = advance(); // Move past the last '*' in '/**'
+
+            /*
+            A '/' immediately after a '*', creates a '✶/' which terminates a
+            multiline / Dart doc comment (nested or outer).
+            */
+            if (next == $SLASH) {
+                --nesting;
+                if (nesting == 0) { // No more nesting, so handle comment
+                    if (!asciiOnlyLines) {
+                        handleUnicode(unicodeStart);
+                    }
+                    next = advance();
+
+                    if (isDartDoc) { // Append a Dart doc ('/**') comment
+                        appendDartDoc(
+                            start, &token::type::MULTI_LINE_COMMENT,
+                            asciiOnlyComment
+                        );
+                    } else { // Append a normal multiline comment
+                        appendComment(
+                            start, &token::type::MULTI_LINE_COMMENT,
+                            asciiOnlyComment
+                        );
+                    }
+                    break; // Exit loop
+                } else {
+                    next = advance();
+                }
+            }
+        } else if (next == $SLASH) { // Possibly starting a new nested comment.
+            next = advance();
+            if (next == $STAR) {     // It's a nested comment
+                ++nesting;
+                next = advance();
+            }
+        } else if (next == $LF) { // Newline '\n' inside a multiline comment.
+            if (!asciiOnlyLines) {
+                // Synchronize the string offset in the UTF scanner.
+                handleUnicode(unicodeStart);
+                asciiOnlyLines = true;
+                unicodeStart = getScanOffset();
+            }
+            lineFeedInMultiLine(); // Notify `LineStarts` accordingly.
+            next = advance();
+        } else {
+            if (next > 127) { // Extended ASCII code
+                asciiOnlyLines = false;
+                asciiOnlyComment = false;
+            }
+            next = advance();
+        }
+    }
+
+    return next;
+}
+
+Int AbstractScanner::tokenizeSingleLineComment(Int next, std::size_t start) {
+    next = advance();                     // Move past the last '/' in '//'
+    const bool isDartDoc = next == $STAR; // A Dart doc comment with '///'
+    return tokenizeSingleLineCommentRest(next, start, isDartDoc);
+}
+
+Int AbstractScanner::tokenizeSingleLineCommentRest(
+    Int next, std::size_t start, bool isDartDoc
+) {
+    bool asciiOnly = true;
+    if (next > 127) {
+        asciiOnly = false;
+    }
+    if (next == $LF || next == $CR || next == $EOF) {
+        tokenizeSingleLineCommentAppend(asciiOnly, start, isDartDoc);
+        return next;
+    }
+
+    asciiOnly &= scanUntilLineEnd();
+    tokenizeSingleLineCommentAppend(asciiOnly, start, isDartDoc);
+
+    return current();
+}
+
+Int AbstractScanner::tokenizeLanguageVersionOrSingleLineComment(Int next) {
+    assert::assert(next == $SLASH); // Ensure we're on the first '/'
+
+    std::size_t start = getScanOffset();
+    next = advance();               // Move after the first '/'
+    assert::assert(next == $SLASH); // Ensure we're on the second '/'
+
+    /*
+    If the next char is a '/', it's a single line Dart doc comment ('///')
+    */
+    if (peek() == $SLASH) {
+        return tokenizeSingleLineComment(next, start);
+    }
+
+    // Move past the second '/' and skip any whitespace
+    next = advance();
+    while (next == $SPACE) next = advance();
+
+    /*
+    Attempt to parse '@dart'.
+
+    Start with the '@' symbol first.
+    */
+    if (next != $AT) { // Just a normal single line comment, so scan it as one
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    next = advance();
+    if (next != $d) { // Just a single line comment starting with '// @'
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    next = advance();
+    if (next != $a) { // Just a single line comment starting with '// @d'
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    next = advance();
+    if (next != $r) { // Just a single line comment starting with '// @da'
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    next = advance();
+    if (next != $t) { // Just a single line comment starting with '// @dar'
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    // '// @dart' found. Skip whitespace
+    next = advance();
+    while (next == $SPACE) next = advance();
+
+    // Attempt for '='
+    if (next != $EQ) { // Still a comment starting with '// @dart'
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    // Attempt to parse the version, starting with the major.
+    next = advance();
+    while (next == $SPACE) next = advance();
+
+    dart::u8 major{0}; // Dart can never reach beyond v255 but who knows?
+    const auto majorStart = getScanOffset();
+
+    while (isDigit(next)) { // Parse major and stop at a non-digit character
+        major = (major * 10) + (next - $0);
+        next = advance();
+    }
+
+    /*
+    If `majorStart` is still the same as the current offset, then major was not
+    parsed meaning it's probably still a single line comment.
+    */
+    if (majorStart == getScanOffset()) {
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    // If a period '.' isn't after major, it's probably a comment.
+    if (next != $PERIOD) {
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+    next = advance();
+
+    // Parse for the minor version
+    dart::u8 minor{0};
+    const auto minorStart = getScanOffset();
+    while (isDigit(next)) {
+        minor = (minor * 10) + (next - $0);
+        next = advance();
+    }
+    if (minorStart == getScanOffset()) { // Probably still a comment
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    // Skip trailing spaces.
+    while (next == $SPACE) next = advance();
+
+    /*
+    If some other non-whitespace character follows the version on the same line,
+    it's not a valid version override comment so classify it as a comment.
+    */
+    if (next != $LF && next != $CR && next != $EOF) {
+        return tokenizeSingleLineCommentRest(next, start, false);
+    }
+
+    auto* versionToken = createLanguageVersionToken(start, major, minor);
+
+    // Notify the language version changed listener (if any) of the change
+    if (languageVersionChanged != nullptr) {
+        (*languageVersionChanged)(this, versionToken);
+    }
+
+    if (includeComments) {
+        appendToCommentStream(versionToken);
+    }
+
+    return next;
+}
+
+Int AbstractScanner::tokenizeRawStringKeywordOrIdentifier(Int next) {
+    /*
+    `next` is $r (or 'r'), which could be the start of a raw string, a keyword
+    (`return` etc) or an identifier.
+
+    Peek at the very next character to decide.
+    */
+    const Int afterNext = peek();
+
+    if (afterNext == $SQ || afterNext == $DQ) { // It's a raw string
+        const std::size_t start = getScanOffset();
+        next = advance();
+        return tokenizeString(next, start, true);
+    }
+
+    return tokenizeKeywordOrIdentifier(next, true);
+}
+
+Int AbstractScanner::tokenizeKeywordOrIdentifier(Int next, bool allowDollar) {
+    // TODO: Add implementation
+    return advance();
+}
+
+Int AbstractScanner::tokenizeString(Int next, std::size_t start, bool isRaw) {
+    const Int quoteChar = next;  // The first ' or " after r (if any).
+    next = advance();            // Advance to next character
+    if (next == quoteChar) {     // "" or ''
+        next = advance();        // Advance once more to next character
+        if (next == quoteChar) { // 3 """ or ''' chars - a multiline string.
+            return tokenizeMultiLineString(quoteChar, start, isRaw);
+        } else {                 // "" or '' - an empty string.
+            appendSubstringToken(&token::type::STRING, start, true);
+            return next;
+        }
+    }
+
+    if (isRaw) { // r"" or r'' - a single line raw string.
+        return tokenizeSingleLineRawString(next, quoteChar, start);
+    } else {     // "" or '' - a normal string.
+        return tokenizeSingleLineString(next, quoteChar, start);
+    }
+}
+
+Int AbstractScanner::tokenizeMultiLineString(
+    Int quoteChar, std::size_t quoteStart, bool isRaw
+) {
+    if (isRaw) return tokenizeMultiLineRawString(quoteChar, quoteStart);
+
+    const std::size_t start = quoteStart;
+
+    // Assume only ASCII characters.
+    bool asciiOnlyString = true;
+    bool asciiOnlyLine = true;
+
+    std::size_t unicodeStart = quoteStart;
+    Int next = advance();  // Move past the last ' or " of the three.
+
+    while (next != $EOF) { // We haven't hit the end.
+        if (next == $$) {
+            // TODO: Add support for interpolation in multiline string
+        }
+
+        if (next == quoteChar) {     // Maybe closing quotes, so check further
+            next = advance();
+            if (next == quoteChar) { // Second quote, check further
+                next = advance();
+                if (next == quoteChar) { // Third quote, closing the string
+                    if (!asciiOnlyLine) {
+                        handleUnicode(unicodeStart);
+                    }
+
+                    // Append the string token and return
+                    next = advance();
+                    appendSubstringToken(
+                        &token::type::STRING, start, asciiOnlyString
+                    );
+                    return next;
+                }
+            }
+            continue; // No second or third quotes, so proceed normally
+        }
+
+        if (next == $BACKSLASH) { // Preserve backslashes
+            next = advance();
+            if (next == $EOF) break;
+        }
+
+        if (next == $LF) {
+            if (!asciiOnlyLine) {
+                // Synchronize the string offset in the UTF8 scanner.
+                handleUnicode(unicodeStart);
+                asciiOnlyLine = true;
+                unicodeStart = getScanOffset();
+            }
+            lineFeedInMultiLine(); // Notify LineStarts accordingly
+        } else if (next > 127) {   // Extended ASCII code
+            asciiOnlyString = false;
+            asciiOnlyLine = false;
+        }
+
+        next = advance();
+    }
+
+    if (!asciiOnlyLine) {
+        handleUnicode(unicodeStart);
+    }
+
+    /*
+    An EOF was hit before the 3 closing quotation marks of the multiline string,
+    so this is an unterminated string.
+    */
+    unterminatedString(
+        quoteChar, quoteStart, start, asciiOnlyString,
+        true, // isMultiline
+        false // isRaw
+    );
+
+    return next;
+}
+
+Int AbstractScanner::tokenizeSingleLineRawString(
+    Int next,              // The char after quoteChar
+    Int quoteChar,         // Either ' or "
+    std::size_t quoteStart // Position of 'r'
+) {
+    bool asciiOnly = true;
+    while (next != $EOF) {
+        // We hit the closing quoteChar of the string.
+        if (next == quoteChar) {
+            if (!asciiOnly) {
+                handleUnicode(quoteStart);
+            }
+            next = advance();
+            appendSubstringToken(&token::type::STRING, quoteStart, asciiOnly);
+            return next;
+        }
+
+        /*
+        We hit a newline '\n' or carriage return before reaching the closing
+        quotes of the string. This is only allowed in multiline strings, so this
+        string is not terminated.
+        */
+        if (next == $LF || next == $CR) {
+            if (!asciiOnly) {
+                handleUnicode(quoteStart);
+            }
+            unterminatedString(
+                quoteChar, quoteStart, quoteStart, asciiOnly,
+                false, // isMultiline
+                true   // isRaw
+            );
+            return next;
+        }
+
+        if (next > 127) { // Extended ASCII code
+            asciiOnly = false;
+        }
+
+        next = advance();
+    }
+
+    if (!asciiOnly) {
+        handleUnicode(quoteStart);
+    }
+
+    // We hit an EOF in the `while` loop before the string could terminate.
+    unterminatedString(
+        quoteChar, quoteStart, quoteStart, asciiOnly,
+        true, // isMultiline
+        true  // isRaw
+    );
+
+    return next;
+}
+
+Int AbstractScanner::tokenizeSingleLineString(
+    Int next, Int quoteChar, std::size_t quoteStart
+) {
+    std::size_t start = quoteStart;
+    bool asciiOnly = true;
+
+    while (next != quoteChar) {
+        if (next == $BACKSLASH) { // Preserve the backlash and proceed.
+            next = advance();
+        } else if (next == $$) {  // Ignore string interpolation (for now)
+            // TODO: Add support for interpolation in single line string
+        }
+
+        // Reaching any of these before `quoteStart` is an unterminated string
+        if (next <= $CR && (next == $LF || next == $CR || next == $EOF)) {
+            if (!asciiOnly) {
+                handleUnicode(start);
+            }
+
+            unterminatedString(
+                quoteChar, quoteStart, start, asciiOnly,
+                false, // isMultiline
+                false  // isRaw
+            );
+            return next;
+        }
+
+        if (next > 127) { // Extended ASCII code
+            asciiOnly = false;
+        }
+        next = advance();
+    }
+
+    if (!asciiOnly) {
+        handleUnicode(start);
+    }
+
+    /*
+    We've hit the closing quote character of the string, so move past it and
+    append it.
+    */
+    next = advance();
+    appendSubstringToken(&token::type::STRING, start, asciiOnly);
+
+    return next;
+}
+
+Int AbstractScanner::tokenizeMultiLineRawString(
+    Int quoteChar, std::size_t quoteStart
+) {
+    // Assume only ASCII characters.
+    bool asciiOnlyString = true;
+    bool asciiOnlyLine = true;
+
+    std::size_t unicodeStart = quoteStart;
+    Int next = advance(); // Move past the last ' or " of the three.
+
+    const auto loop = [&] -> Int {
+        while (next != $EOF) {          // We're not yet at the end.
+            while (next != quoteChar) { // And still inside the string
+                if (next == $LF) {      // Newline '\n' character
+                    if (!asciiOnlyLine) {
+                        handleUnicode(unicodeStart);
+                        asciiOnlyLine = true;
+                        unicodeStart = getScanOffset();
+                    }
+                    lineFeedInMultiLine();
+                } else if (next > 127) { // Extended ASCII code
+                    asciiOnlyString = false;
+                    asciiOnlyLine = false;
+                }
+                next = advance();
+                if (next == $EOF) return $EOF; // Exit lambda
+            }
+            // On first closing quotation mark of the string
+
+            next = advance();     // Move to second quotation mark
+            if (next == quoteChar) {
+                next = advance(); // Move to third quotation mark
+                if (next == quoteChar) {
+                    if (!asciiOnlyLine) handleUnicode(unicodeStart);
+
+                    next = advance(); // Move past last quotation mark
+
+                    // Append the string and return
+                    appendSubstringToken(
+                        &token::type::STRING, quoteStart, asciiOnlyString
+                    );
+                    return next;
+                }
+            }
+        }
+
+        return next;
+    };
+
+    next = loop();
+
+    if (!asciiOnlyLine) {
+        handleUnicode(unicodeStart);
+    }
+
+    // We reached EOF before the string was terminated, so report it
+    unterminatedString(
+        quoteChar, quoteStart, quoteStart, asciiOnlyLine,
+        true, // isMultiline
+        true  // isRaw
+    );
+    return next;
+}
+
+Int AbstractScanner::tokenizeStringInterpolation(
+    std::size_t start, bool asciiOnly
+) {
+    // TODO: Implement tokenizeStringInterpolation
+    return advance();
+
+    /*
+    appendSubstringToken(&token::type::STRING, start, asciiOnly);
+    beginToken();                      // Mark that '$' begins here.
+    Int next = advance();
+    if (next == $OPEN_CURLY_BRACKET) { // Interpolating an expression
+
+    } else {                           // Interpolating a identifier
+    }
+    */
+}
+
+void AbstractScanner::appendDartDoc(
+    std::size_t start, const token::type::TokenType* type, bool asciiOnly
+) {
+    if (!includeComments) return;
+
+    auto* newComment = createDartDocComment(type, start, asciiOnly);
+    appendToCommentStream(newComment);
+}
+
+void AbstractScanner::appendComment(
+    std::size_t start, const token::type::TokenType* type, bool asciiOnly
+) {
+    if (!includeComments) return;
+
+    auto* newComment = createCommentToken(type, start, asciiOnly);
+    appendToCommentStream(newComment);
+}
+
+void AbstractScanner::appendToCommentStream(token::CommentToken* newComment) {
+    if (comments == nullptr) {
+        // Comments stream is empty, so the new comment is both head and tail.
+        comments = newComment;
+        commentsTail = comments;
+    } else {
+        // Link `newComment` and `commentsTail` to each other.
+        commentsTail->setNext(newComment);
+        commentsTail->getNext()->setPrevious(commentsTail);
+
+        // Make `newComment` the new tail
+        commentsTail = commentsTail->getNext();
+    }
+}
+
+void AbstractScanner::appendToken(Token* token) {
+    tail->setNext(token);     // connect tail -> token
+    token->setPrevious(tail); // connect tail <- token
+    tail = token;             // make token the new tail
+
+    // TODO: Test this out
+    if (comments != nullptr && comments == token->getPrecedingComments()) {
+        comments = nullptr;
+        commentsTail = nullptr;
+    } else {
+        /*
+        The caller is responsible for creating the token object being appended,
+        along with any preceding comments (if any).
+        */
+        assert::assert(
+            comments == nullptr || //
+            token->isSynthetic() ||
+            (dynamic_cast<ErrorToken*>(token) != nullptr)
+        );
+    }
+}
+
+void AbstractScanner::appendSubstringToken(
+    const token::type::TokenType* type,
+    std::size_t start,
+    bool asciiOnly,
+    std::size_t extraOffset
+) {
+    appendToken(createSubstringToken(
+        type, start, asciiOnly, extraOffset, allowLazyStrings
+    ));
+}
+
+void AbstractScanner::appendSyntheticSubstringToken(
+    const token::type::TokenType* type,
+    std::size_t start,
+    bool asciiOnly,
+    std::string_view syntheticChars
+) {
+    appendToken(
+        createSyntheticSubstringToken(type, start, asciiOnly, syntheticChars)
+    );
+}
+
+void AbstractScanner::appendEofToken() {
+    beginToken();
+    discardOpenLt();
+
+    if (groupingStack->isNotEmpty() &&
+        groupingStack->head->isA(&token::type::OPEN_CURLY_BRACKET) &&
+        groupingStack->tail->isEmpty()) {
+        // Opening '{' without a closing '}'. User could be typing.
+        openBraceWithMissingEndForPossibleRecovery = groupingStack->head;
+    }
+
+    while (groupingStack->isNotEmpty()) {
+        unmatchedBeginGroup(groupingStack->head);
+        auto* head = groupingStack->head;
+        groupingStack = groupingStack->tail;
+        delete head;
+    }
+
+    appendToken(token::TokenFactory::eof(tokenStart, comments));
+}
+
+void AbstractScanner::prependErrorToken(ErrorToken* errorToken) {
+    setHasErrors(true);
+    if (errorTail == tail) {     // Both error and tail tokens are the same
+        appendToken(errorToken); // so append the token normally
+        errorTail = tail;        // and update errorTail to be in sync
+    } else {
+        /*
+        Connect `errorToken` and `errorTail->getNext()` together:
+
+            errorToken => errorTail->getNext()
+            errorToken <= errorTail->getNext()
+        */
+        errorToken->setNext(errorTail->getNext());
+        errorToken->getNext()->setPrevious(errorToken);
+
+        /*
+        Connect `errorTail` and `errorToken` together:
+
+            errorTail => errorToken
+            errorTail <= errorToken
+        */
+        errorTail->setNext(errorToken);
+        errorToken->setPrevious(errorTail);
+
+        // Finally update errorTail to errorToken
+        errorTail = errorTail->getNext();
+    }
+}
+
+void AbstractScanner::unterminatedString(
+    Int quoteChar,
+    std::size_t quoteStart,
+    std::size_t start,
+    bool asciiOnly,
+    bool isMultiline,
+    bool isRaw
+) {
+    const auto suffix =
+        isMultiline ? std::format("{}{}{}", quoteChar, quoteChar, quoteChar)
+                    : std::format("{}", quoteChar);
+    const auto prefix = isRaw ? std::format("${}", suffix) : suffix;
+
+    appendSyntheticSubstringToken(
+        &token::type::STRING, start, asciiOnly, suffix
+    );
+
+    // Report the error on a visible token
+    const auto offset = getStringOffset();
+    std::size_t errorStart = tokenStart < offset ? tokenStart : quoteStart;
+    prependErrorToken(
+        new token::UnterminatedString(prefix, errorStart, offset)
+    );
+}
+
+void AbstractScanner::discardOpenLt() {
+    while (groupingStack->isNotEmpty() &&
+           groupingStack->head->getKind() == LT_TOKEN) {
+        auto* head = groupingStack->head;
+        groupingStack = groupingStack->tail;
+        delete head;
+    }
+}
+
+void AbstractScanner::unmatchedBeginGroup(token::BeginToken* begin) {
+    const auto* type = closeBraceInfoFor(begin);
+    appendToken(new token::SyntheticToken(type, tokenStart, tail));
+    begin->setEndGroup(tail);
+    prependErrorToken(new token::UnmatchedToken(begin));
+    ++recoveryCount;
+}
+
+const TokenType*
+AbstractScanner::closeBraceInfoFor(const BeginToken* token) const {
+    const auto lexeme = token->getLexeme();
+    if (lexeme == "(") return &token::type::CLOSE_PAREN;
+    if (lexeme == "[") return &token::type::CLOSE_SQUARE_BRACKET;
+    if (lexeme == "{") return &token::type::CLOSE_CURLY_BRACKET;
+    if (lexeme == "<") return &token::type::GT;
+    if (lexeme == "${") return &token::type::CLOSE_CURLY_BRACKET;
+
+    throw std::logic_error(
+        std::format("Unknown BeginToken lexeme: `{}`", lexeme)
+    );
+}
+
+Int AbstractScanner::unexpected(Int character) {
+    // Create an `ErrorToken` to represent the invalid character
+    auto* errorToken = buildUnexpectedCharacterToken(character, tokenStart);
+
+    // The error is related to a non-ASCII identifier character
+    if (dynamic_cast<NonAsciiIdentifierToken*>(errorToken)) {
+        std::size_t charOffset;
+        std::string value;
+
+        if (tail->isA(&token::type::IDENTIFIER) &&
+            tokenStart == tail->getCharEnd()) {
+            charOffset = tail->getCharOffset(); // Start of tail
+            value = tail->getLexeme();
+            tail = tail->getPrevious();
+        } else {
+            charOffset = errorToken->getCharOffset();
+        }
+
+        value += errorToken->getCharacter();
+        prependErrorToken(errorToken);
+
+        Int next = advanceAfterError();
+        while (internal_utils::isIdentifierChar(next, true)) {
+            value += next;
+            next = advance();
+        }
+
+        auto* token = new token::StringTokenImpl(
+            &token::type::IDENTIFIER, value, charOffset, comments
+        );
+        appendToken(token);
+        return next;
+    } else {
+        // It's some other character error. Add it to the stream and advance.
+        prependErrorToken(errorToken);
+        return advanceAfterError();
+    }
+}
 } // namespace scanner
 } // namespace front_end
 } // namespace dart

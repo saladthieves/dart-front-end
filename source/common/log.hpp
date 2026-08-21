@@ -17,14 +17,12 @@ enum class LogLevel : std::uint8_t {
     RAW,
 };
 
-// clang-format off
-inline constexpr auto LABEL_FATAL   = "F"sv;
-inline constexpr auto LABEL_ERROR   = "E"sv;
+inline constexpr auto LABEL_FATAL = "F"sv;
+inline constexpr auto LABEL_ERROR = "E"sv;
 inline constexpr auto LABEL_WARNING = "W"sv;
-inline constexpr auto LABEL_INFO    = "I"sv;
-inline constexpr auto LABEL_DEBUG   = "D"sv;
+inline constexpr auto LABEL_INFO = "I"sv;
+inline constexpr auto LABEL_DEBUG = "D"sv;
 inline constexpr auto LABEL_VERBOSE = "V"sv;
-// clang-format on
 
 inline constexpr std::string_view getLevelLabel(const LogLevel& level) {
     switch (level) {

@@ -101,6 +101,61 @@ inline std::unique_ptr<Message> nonAsciiWhitespace(dart::u16 character) {
     return std::make_unique<Message>(code, problemMessage, arguments);
 }
 
+/*
+Returns a `Message` indicating an unterminated string with the given `openQuote`
+value and missing `expectedCloseQuote`.
+*/
+inline std::unique_ptr<Message> unterminatedString(
+    std::string_view openQuote,
+    std::string_view expectedCloseQuote
+) {
+    constexpr auto code = Code {
+        "UnterminatedString",
+        PseudoSharedCode::UNTERMINATED_STRING_LITERAL
+    };
+    const auto problemMessage = std::format(
+        "String starting with `{}` must end with `{}`.", 
+        openQuote, expectedCloseQuote
+    );
+    const auto arguments = Message::Args {
+        {"openQuote", std::string{openQuote}},
+        {"expectedCloseQuote", std::string{expectedCloseQuote}}
+    };
+
+    return std::make_unique<Message>(code, problemMessage, arguments);
+}
+
+// TODO: Add docs
+inline std::unique_ptr<Message> unmatchedToken(
+    std::string_view expected,
+    std::string_view lexeme
+) {
+    constexpr auto code = Code {
+        "UnmatchedToken",
+        PseudoSharedCode::EXPECTED_TOKEN
+    };
+    const auto problemMessage = std::format(
+        "Can't find `{}` to match `{}`.", expected, lexeme
+    );
+    const auto arguments = Message::Args {
+        {"expected", std::string{expected}},
+        {"lexeme", std::string{lexeme}}
+    };
+
+    return std::make_unique<Message>(code, problemMessage, arguments);
+}
+
+// TODO: Add docs
+inline std::unique_ptr<Message> unterminatedComment() {
+    constexpr auto code = Code {
+        "UnterminatedComment",
+        PseudoSharedCode::UNTERMINATED_MULTI_LINE_COMMENT,
+    };
+    
+    constexpr auto problemMessage = "Comment starting with '/*' must end wit '*/'.";
+    return std::make_unique<Message>(code, problemMessage);
+}
+
 // clang-format on
 } // namespace diag
 } // namespace codes

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "simple_token.hpp"
 #include "begin_token.hpp"
 #include "keyword_token.hpp"
+#include "simple_token.hpp"
 #include "string_token.hpp"
 
 namespace dart {
@@ -18,14 +18,24 @@ code.
 */
 class SyntheticToken : public SimpleToken {
 public:
-    explicit SyntheticToken(const type::TokenType* type, std::size_t offset)
-        : SimpleToken(type, offset) {}
+    explicit SyntheticToken(
+        const type::TokenType* type,
+        std::size_t offset,
+        const Token* beforeSynthetic = nullptr
+    )
+        : SimpleToken(type, offset),
+          beforeSynthetic{beforeSynthetic} { }
 
-    virtual const Token* getBeforeSynthetic() const override = 0;
+    virtual const Token* getBeforeSynthetic() const override {
+        return beforeSynthetic;
+    };
 
     virtual bool isSynthetic() const override { return true; }
 
     virtual std::size_t getLength() const override { return 0; }
+
+private:
+    const Token* beforeSynthetic{nullptr};
 };
 
 /*
@@ -37,7 +47,9 @@ one.
 */
 class ReplacementToken : public SyntheticToken {
 public:
-    explicit ReplacementToken(const type::TokenType* type, const Token* replacedToken)
+    explicit ReplacementToken(
+        const type::TokenType* type, const Token* replacedToken
+    )
         : SyntheticToken(type, replacedToken->getOffset()),
           replacedToken{replacedToken} {
         setPrecedingComments(replacedToken->getPrecedingComments());
@@ -71,7 +83,7 @@ public:
         std::size_t offset,
         CommentToken* precedingComment = nullptr
     )
-        : BeginToken(type, offset, precedingComment) {}
+        : BeginToken(type, offset, precedingComment) { }
 
     virtual const Token* getBeforeSynthetic() const override {
         return beforeSynthetic;
@@ -94,8 +106,10 @@ A synthetic version of a keyword token.
 */
 class SyntheticKeywordToken : public KeywordToken {
 public:
-    explicit SyntheticKeywordToken(const type::TokenType* keyword, std::size_t offset)
-        : KeywordToken(keyword, offset) {}
+    explicit SyntheticKeywordToken(
+        const type::TokenType* keyword, std::size_t offset
+    )
+        : KeywordToken(keyword, offset) { }
 
     virtual const Token* getBeforeSynthetic() const override {
         return beforeSynthetic;
@@ -125,7 +139,7 @@ public:
     )
         : StringToken(type, value, offset),
           useLength{useLength},
-          length{length} {}
+          length{length} { }
 
     virtual const Token* getBeforeSynthetic() const override {
         return beforeSynthetic;
@@ -147,7 +161,7 @@ private:
     bool useLength{false};
     std::size_t length{0};
 };
-}
+} // namespace token
 } // namespace scanner
 } // namespace front_end
 } // namespace dart

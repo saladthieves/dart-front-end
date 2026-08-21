@@ -3,6 +3,7 @@
 #include "begin_token.hpp"
 #include "characters.hpp"
 #include "simple_token.hpp"
+#include "token/recovery.hpp"
 #include "token_types.hpp"
 
 #include "messages/diagnostic_codes.hpp"
@@ -26,7 +27,7 @@ considered to be an error.
 class ErrorToken : public SimpleToken {
 public:
     explicit ErrorToken(std::size_t offset)
-        : SimpleToken(&type::BAD_INPUT, offset, nullptr) {}
+        : SimpleToken(&type::BAD_INPUT, offset, nullptr) { }
 
     /*
     Creates the `Message` object that represents the error information regarding
@@ -51,7 +52,7 @@ public:
 
     virtual std::string_view getStart() const { return ""; };
 
-    virtual dart::s64 getEndOffset() const { return -1; };
+    virtual std::size_t getEndOffset() const { return 0; };
 
     virtual const BeginToken* getBeginToken() const { return nullptr; }
 
@@ -59,8 +60,9 @@ protected:
     /*
     The assertion message for this error token.
 
-    This is initialized via the call to `buildAssertionMessage` in the derived
-    subclasses.
+    The `Message` objects used for initialization typically come from the
+    `diagnostic_codes.hpp` header file. An overridden call to the
+    `buildAssertionMessage` function in derived classes initializes this object.
     */
     std::unique_ptr<Message> message{nullptr};
 };
@@ -102,7 +104,7 @@ U+FFFD �) is encountered.
 */
 class EncodingErrorToken : public ErrorToken {
 public:
-    EncodingErrorToken(std::size_t offset) : ErrorToken(offset) {
+    explicit EncodingErrorToken(std::size_t offset): ErrorToken(offset) {
         buildAssertionMessage();
     }
 
@@ -119,7 +121,7 @@ a comment or a string.
 */
 class NonAsciiWhitespaceToken : public ErrorToken {
 public:
-    NonAsciiWhitespaceToken(dart::u16 character, std::size_t offset)
+    explicit NonAsciiWhitespaceToken(dart::u16 character, std::size_t offset)
         : ErrorToken(offset),
           character{character} {
         buildAssertionMessage();
@@ -145,7 +147,7 @@ represented by the `NonAsciiWhitespace` class.
 */
 class NonAsciiIdentifierToken : public ErrorToken {
 public:
-    NonAsciiIdentifierToken(dart::u16 character, std::size_t offset)
+    explicit NonAsciiIdentifierToken(dart::u16 character, std::size_t offset)
         : ErrorToken(offset),
           character{character} {
         buildAssertionMessage();
@@ -156,11 +158,97 @@ public:
     }
 
     // TODO: Add std::formatter<NonAsciiIdentifierToken> specialization
+
 private:
     /*
     The non-ASCII character.
     */
     dart::u16 character;
+};
+
+// TODO: Add docs
+class UnterminatedString : public ErrorToken {
+public:
+    explicit UnterminatedString(
+        std::string_view start, std::size_t charOffset, std::size_t endOffset
+    )
+        : ErrorToken(charOffset),
+          start{start},
+          endOffset{endOffset} {
+        buildAssertionMessage();
+    }
+
+    virtual void buildAssertionMessage() override {
+        message = diag::unterminatedString(start, closeQuoteFor(start));
+    }
+
+    virtual std::string_view getStart() const override { return start; }
+
+    virtual std::size_t getEndOffset() const override { return endOffset; }
+
+    virtual std::size_t getCharCount() const override {
+        return endOffset - getCharOffset();
+    }
+
+    virtual std::size_t getLength() const override { return getCharCount(); }
+
+    // TODO: Add std::formatter<UnterminatedString> specialization
+
+private:
+    std::string start;
+    std::size_t endOffset;
+};
+
+// TODO: Add docs
+class UnmatchedToken : public ErrorToken {
+public:
+    explicit UnmatchedToken(const BeginToken* begin)
+        : ErrorToken(begin->getCharOffset()),
+          begin{begin} {
+        buildAssertionMessage();
+    }
+
+    virtual void buildAssertionMessage() override {
+        message = diag::unmatchedToken(
+            closeBraceFor(begin->getLexeme()), begin->getLexeme()
+        );
+    }
+
+    const BeginToken* getBeginToken() const override { return begin; }
+
+    // TODO: Add std::formatter<UnmatchedToken> specialization
+
+private:
+    const BeginToken* begin;
+};
+
+// TODO: Add docs
+class UnterminatedToken : public ErrorToken {
+public:
+    explicit UnterminatedToken(
+        std::unique_ptr<Message> assertionMessage,
+        std::size_t charOffset,
+        std::size_t endOffset
+    )
+        : ErrorToken(charOffset),
+          endOffset{endOffset} {
+        message = std::move(assertionMessage);
+    }
+
+    virtual void buildAssertionMessage() override {
+        // Do nothing
+    }
+
+    virtual std::size_t getEndOffset() const override { return endOffset; }
+
+    virtual std::size_t getCharCount() const override {
+        return endOffset - getCharOffset();
+    }
+
+    // TODO: Add std::formatter<UnterminatedToken> specialization
+
+private:
+    std::size_t endOffset;
 };
 
 // TODO: Add docs

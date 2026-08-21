@@ -44,7 +44,8 @@ public:
           precedence{precedence},
           kind{kind},
           binaryOperatorOfCompoundAssignment{
-              binaryOperatorOfCompoundAssignment},
+              binaryOperatorOfCompoundAssignment
+          },
           isBinaryOperator{isBinaryOperator},
           isModifier{isModifier},
           isOperator{isOperator},
@@ -62,7 +63,7 @@ public:
     Disable copy-assignment operator - `TokenType` and its derivatives should
     not be copy-assignable.
     */
-    TokenType& operator=(const TokenType& other) = delete;
+    TokenType& operator =(const TokenType& other) = delete;
 
     constexpr virtual ~TokenType() = default;
 
@@ -167,6 +168,12 @@ public:
     constexpr bool isSelectorOperator() const {
         return precedence == precedence::SELECTOR;
     }
+
+    /*
+    Returns `true` if `this` token type object is the same one as `value` (if
+    they're the same pointer values), `false` otherwise.
+    */
+    constexpr bool isA(const TokenType* value) const { return this == value; }
 
     // TODO: Implement std::formatter<TokenType>
 

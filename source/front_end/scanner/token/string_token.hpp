@@ -21,7 +21,7 @@ public:
         CommentToken* precedingComment = nullptr
     )
         : SimpleToken(type, offset, precedingComment),
-          value{string_utils::intern(value)} {}
+          value {string_utils::intern(value)} {}
 
     virtual bool isIdentifier() const override {
         return getKind() == constants::IDENTIFIER_TOKEN;
@@ -37,7 +37,7 @@ private:
     */
     std::string value;
 };
-}
+} // namespace token
 } // namespace scanner
 } // namespace front_end
 } // namespace dart

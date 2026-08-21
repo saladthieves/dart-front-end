@@ -1,6 +1,8 @@
 #pragma once
 
 #include "comment_token.hpp"
+#include "token/simple_token.hpp"
+#include "token/token_type.hpp"
 
 namespace dart {
 namespace front_end {
@@ -22,6 +24,14 @@ public:
         eof->setNext(eof);
 
         return eof;
+    }
+
+    static SimpleToken* simple(
+        const type::TokenType* type,
+        std::size_t offset,
+        CommentToken* precedingComments = nullptr
+    ) {
+        return new SimpleToken(type, offset, precedingComments);
     }
 };
 

@@ -25,7 +25,7 @@ public:
     virtual std::size_t getLength() const = 0;
 
     /*
-    Returns the offset from the beginning of the file to the character one past
+    Returns the offset from the beginning of the file to the position one past
     the last character in the entity's source range.
     */
     virtual std::size_t getEnd() const = 0;

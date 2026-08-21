@@ -15,8 +15,8 @@ public:
 
     bool isNotEmpty() const { return !isEmpty(); }
 
-    const T* head;
-    const Link<T>* tail;
+    T* head;
+    Link<T>* tail;
 };
 
 } // namespace util

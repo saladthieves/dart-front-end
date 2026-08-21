@@ -3,6 +3,7 @@
 #include "keyword.hpp"
 
 #include "base/syntactic_entity.hpp"
+#include "token/token_type.hpp"
 
 namespace dart {
 namespace front_end {
@@ -165,15 +166,16 @@ public:
     tokens in the stream can be reached with `getNext()` (on the comment token)
     until `nullptr` is returned.
 
-    Given a source input of two tokens and `this` token:
-    ```
-    ...
-    // first
-    // second
-    [`this` token]
+    Given a source input of two comments preceding `this` token:
+    `// first`
 
+    `// second`
+    
+    `[token]`   <-- this token
+    
     Calling `getPrecedingComments()` will return `// first`. Calling it again
-    will return `// second`. Calling it a third time will return `nullptr`.
+    will return `// second`. Calling it a third time will return `nullptr` since
+    there are no more comment tokens before `this`.
     */
     virtual CommentToken* getPrecedingComments() const = 0;
 
@@ -233,6 +235,12 @@ public:
     // TODO: Implement std::formatter<Token> per base
 
     // TODO: Implement Object::value()
+
+    /*
+    Returns `true` if the token type associated with `this` token is the same as
+    the provided token type, `false` if not.
+    */
+    bool isA(const type::TokenType* type) const { return getType()->isA(type); }
 
     /*
     Returns the token (from the given list) that appears first (left-most) in

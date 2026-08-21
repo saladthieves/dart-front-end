@@ -1,17 +1,27 @@
 #pragma once
 
-#include "token/token.hpp"
 #include "common/types.hpp"
+#include "token/token.hpp"
 
 #include <vector>
 
 namespace dart {
 namespace front_end {
 namespace scanner {
-
 // TODO: Add docs after understanding what this class is used for
 class LineStarts {
 public:
+    /*
+    The Dart implementation of `LineStarts` internally uses either a 16-bit
+    (Uint16List) or a 32-bit (Uint32List) array to store the the line starting
+    offset values added via the `add()` function.
+
+    The implementation starts with the 16-bit array to store the values. If an
+    offset value that cannot fit in 16 bits (larger than 2^16 / 65535) is added,
+    the array is switched to a 32-bit array and the value is then added.
+
+    This C++ implementation just uses a 32-bit vector.
+    */
     using Int = dart::u32;
 
     explicit LineStarts(std::size_t numberOfBytesHint)
@@ -92,6 +102,12 @@ public:
     `false` if not.
     */
     virtual bool hasErrors() const = 0;
+
+    /*
+    Sets whether an error occurred during the tokenization process (`true`) or
+    not (`false`).
+    */
+    virtual void setHasErrors(bool value) = 0;
 
     virtual const LineStarts* getLineStarts() const = 0;
 

@@ -13,7 +13,7 @@ inline constexpr dart::u8 $EOF = 0;   // EOF ([unused code] instead of -1)
 inline constexpr dart::u8 $STX = 2;   // Start of text
 inline constexpr dart::u8 $BS = 8;    // Backspace
 inline constexpr dart::u8 $TAB = 9;   // Horizontal tab
-inline constexpr dart::u8 $LF = 10;   // Line feed
+inline constexpr dart::u8 $LF = 10;   // Line feed (aka \n)
 inline constexpr dart::u8 $VTAB = 11; // Vertical tab
 inline constexpr dart::u8 $FF = 12;   // Form feed
 inline constexpr dart::u8 $CR = 13;   // Carriage return
@@ -136,15 +136,15 @@ The unicode replacement character U+FFFD aka �
 */
 inline constexpr dart::u16 $UNICODE_REPLACEMENT_CHAR = 0xFFFD;
 
-inline constexpr bool isDigit(const dart::u8& code) {
+inline constexpr bool isDigit(const dart::u8 &code) {
     return $0 <= code && code <= $9;
 }
 
-inline constexpr bool isHexDigit(const dart::u8& code) {
+inline constexpr bool isHexDigit(const dart::u8 &code) {
     return std::isxdigit(code);
 }
 
-inline constexpr dart::u8 hexDigitValue(const dart::u8& hex) {
+inline constexpr dart::u8 hexDigitValue(const dart::u8 &hex) {
     assert::assert(isDigit(hex), "Character '{}' is not hexadecimal", hex);
 
     if (hex <= $9) return hex - $0;

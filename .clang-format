@@ -4,41 +4,92 @@ IndentWidth: 4
 Language: Cpp
 
 AccessModifierOffset: -4
+AlignAfterOpenBracket: false
 AlignArrayOfStructures: Left
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
 AlignConsecutiveShortCaseStatements:
   Enabled: true
   AcrossEmptyLines: true
   AcrossComments: true
+  AlignCaseArrows: true
+AlignEscapedNewlines: Right
 AlignOperands: Align
 AlignTrailingComments:
   Kind: Always
   OverEmptyLines: 1
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowBreakBeforeNoexceptSpecifier: Never
 AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseExpressionOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
+AllowShortCompoundRequirementOnASingleLine: true
 AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: WithoutElse
-AllowShortLambdasOnASingleLine: false
+AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: true
+AllowShortNamespacesOnASingleLine: false
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackLongBracedList: true
 BinPackParameters: OnePerLine
+BreakAdjacentStringLiterals: true
 BreakAfterAttributes: Never
+BreakAfterOpenBracketBracedList: true
 BreakAfterOpenBracketFunction: true
+BreakAfterReturnType: Automatic
+BreakArrays: false
+BreakBeforeCloseBracketBracedList: true
 BreakBeforeCloseBracketFunction: true
+BreakBeforeInlineASMColon: Always
+BreakBeforeTemplateCloser: false
 BreakBeforeTernaryOperators: true
-BreakConstructorInitializers: BeforeColon
 BreakInheritanceList: AfterColon
+BreakStringLiterals: true
 BreakTemplateDeclarations: Yes
 CompactNamespaces: false
+Cpp11BracedListStyle: FunctionCall
 DerivePointerAlignment: false
 EmptyLineBeforeAccessModifier: Always
+FixNamespaceComments: true
 IncludeBlocks: Preserve
 IndentCaseLabels: true
 IndentExternBlock: true
 IndentPPDirectives: AfterHash
+IndentRequiresClause: false
+LambdaBodyIndentation: Signature
+NamespaceIndentation: None
+NumericLiteralCase:
+  ExponentLetter: Upper
+  HexDigit: Upper
+  Prefix: Lower
+  Suffix: Upper
 PackConstructorInitializers: CurrentLine
 PointerAlignment: Left
 PPIndentWidth: 2
 QualifierAlignment: Left
 SeparateDefinitionBlocks: Always
-
+SortIncludes: true
+SortUsingDeclarations: Lexicographic
+SpaceAfterLogicalNot: false
+SpaceAfterOperatorKeyword: true
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: false
+SpaceBeforeInheritanceColon: true
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBraces: Always
+# 
 DisableFormat: false

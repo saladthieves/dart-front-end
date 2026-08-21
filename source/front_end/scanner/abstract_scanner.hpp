@@ -2,9 +2,14 @@
 
 #include "scanner.hpp"
 
-#include "token/token_factory.hpp"
 #include "token/begin_token.hpp"
 #include "token/comment_token.hpp"
+#include "token/error_token.hpp"
+#include "token/string_token.hpp"
+#include "token/token.hpp"
+#include "token/token_factory.hpp"
+#include "token/token_impl.hpp"
+#include "token/token_type.hpp"
 #include "util/link.hpp"
 
 #include <cstddef>
@@ -18,9 +23,10 @@ namespace scanner {
 Callback definition for a language version change.
 */
 using LanguageVersionChanged = std::function<void(
-    const Scanner<>* scanner, //
-    const token::LanguageVersionToken* languageVersion
+    const Scanner<>* scanner, const token::LanguageVersionToken* languageVersion
 )>;
+
+// TODO: Organize function calls
 
 /*
 Abstract implementation of a scanner.
@@ -62,7 +68,7 @@ public:
               token::TokenFactory::eof(0), // TODO: Check for Dart passes in -1
               numberOfBytesHint,
               allowLazyStrings
-          ) {}
+          ) { }
 
     virtual ~AbstractScanner() override {
         delete lineStarts; //
@@ -74,11 +80,14 @@ public:
 
     virtual bool hasErrors() const override { return _hasErrors; }
 
+    virtual void setHasErrors(bool value) override { _hasErrors = value; }
+
     virtual void setConfiguration(const ScannerConfiguration* config) override;
 
     /*
     Returns `true` when at EOF, `false` otherwise.
     */
+    // TODO: Update docs after implementation
     virtual bool atEndOfFile() const = 0;
 
     /*
@@ -100,9 +109,12 @@ public:
     /*
     Sets the `tokenStart` value to the current string offset.
 
-    This effectively notifies that a new token begins at the current offset.
+    This effectively notifies that a new token starts at the current offset.
     */
     void beginToken() { tokenStart = getStringOffset(); }
+
+    // TODO: Add docs
+    const token::Token* getFirstToken() { return tokens->getNext(); }
 
     /*
     Skip past all spaces and returns the latest character that's not a space
@@ -110,7 +122,38 @@ public:
     */
     virtual Int skipSpaces() = 0;
 
+    // TODO: Add docs
+    virtual Int advance() = 0;
+
+    // TODO: Add docs
+    Int advanceAfterError();
+
+    // TODO: Add docs
+    virtual Int peek() = 0;
+
+    virtual Int current() = 0;
+
+    // TODO: Add docs
+    virtual Int currentAsUnicode(Int next) = 0;
+
+    // TODO: Add docs
+    virtual bool scanUntilLineEnd();
+
+    // TODO: Add docs once we know how this works.
+    virtual void handleUnicode(std::size_t startScanOffset) = 0;
+
+    /*
+    Notifies when a line feed character ($LF) or '\n' is encountered in a
+    multi-line string or comment.
+    */
+    void lineFeedInMultiLine() {
+        lineStarts->add(getStringOffset() + 1); // +1, new line starts after \n
+    }
+
     virtual const token::Token* tokenize() override;
+
+    // TODO: Add docs
+    Int scanHeaderLookingForLanguageVersion(Int next);
 
     // TODO: Add docs
     Int bigHeaderSwitch(Int next);
@@ -119,10 +162,178 @@ public:
     Int bigSwitch(Int next);
 
     // TODO: Add docs
-    Int unexpected(Int character);
+    Int tokenizeSlashOrComment(Int next);
 
     // TODO: Add docs
-    virtual Int currentAsUnicode(Int next) = 0;
+    void tokenizeSingleLineCommentAppend(
+        bool asciiOnly, std::size_t start, bool isDartDoc
+    );
+
+    // TODO: Add docs
+    Int tokenizeMultiLineComment(Int next, std::size_t start);
+
+    // TODO: Add docs
+    Int tokenizeSingleLineComment(Int next, std::size_t start);
+
+    // TODO: Add docs
+    Int
+    tokenizeSingleLineCommentRest(Int next, std::size_t start, bool isDartDoc);
+
+    // TODO: Add docs
+    Int tokenizeLanguageVersionOrSingleLineComment(Int next);
+
+    // TODO: Add docs
+    Int tokenizeRawStringKeywordOrIdentifier(Int next);
+
+    // TODO: Add docs
+    Int tokenizeKeywordOrIdentifier(Int next, bool allowDollar);
+
+    // TODO: Add docs
+    Int tokenizeString(Int next, std::size_t start, bool isRaw);
+
+    // TODO: Add docs
+    Int
+    tokenizeMultiLineString(Int quoteChar, std::size_t quoteStart, bool isRaw);
+
+    // TODO: Add docs
+    Int tokenizeSingleLineRawString(
+        Int next, Int quoteChar, std::size_t quoteStart
+    );
+
+    // TODO: Add docs
+    Int
+    tokenizeSingleLineString(Int next, Int quoteChar, std::size_t quoteStart);
+
+    // TODO: Add docs
+    Int tokenizeMultiLineRawString(Int quoteChar, std::size_t quoteStart);
+
+    // TODO: Add docs
+    Int tokenizeStringInterpolation(std::size_t start, bool asciiOnly);
+
+    // TODO: Add docs
+    virtual token::DartDocComment* createDartDocComment(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::size_t extraOffset = 0
+    ) = 0;
+
+    // TODO: Add docs
+    virtual token::CommentToken* createCommentToken(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::size_t extraOffset = 0
+    ) = 0;
+
+    virtual token::LanguageVersionToken* createLanguageVersionToken(
+        std::size_t start, dart::u8 major, dart::u8 minor
+    ) = 0;
+
+    // TODO: Add docs
+    virtual token::StringToken* createSubstringToken(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::size_t extraOffset,
+        bool allowLazy
+    ) = 0;
+
+    // TODO: Add docs
+    virtual token::StringToken* createSyntheticSubstringToken(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::string_view syntheticChars
+    ) = 0;
+
+    // TODO: Add docs
+    void appendDartDoc(
+        std::size_t start, const token::type::TokenType* type, bool asciiOnly
+    );
+
+    // TODO: Add docs
+    void appendComment(
+        std::size_t start, const token::type::TokenType* type, bool asciiOnly
+    );
+
+    // TODO: Add docs
+    void appendToCommentStream(token::CommentToken* newComment);
+
+    /*
+    Append the given token to the `tail` of the current stream of tokens,
+    linking both `tail` and `token` in both directions (`tail` -> `token` and
+    `token` -> `tail`).
+
+    After linking, `token` becomes the new `tail`.
+    */
+    void appendToken(token::Token* token);
+
+    // TODO: Add docs
+    void appendSubstringToken(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::size_t extraOffset = 0
+    );
+
+    // TODO: Add docs
+    void appendSyntheticSubstringToken(
+        const token::type::TokenType* type,
+        std::size_t start,
+        bool asciiOnly,
+        std::string_view syntheticChars
+    );
+
+    // TODO: Add docs
+    void appendPrecedenceToken(const token::type::TokenType* type) {
+        appendToken(token::TokenFactory::simple(type, tokenStart, comments));
+    }
+
+    // TODO: Add docs
+    void appendEofToken();
+
+    /*
+    Prepends the given `errorToken` to the stream of tokens.
+
+    If the most recently appended `tail` and `errorTail` are the same, the error
+    token is appended to the stream normally and `errorTail` is updated to point
+    to the newly appended `tail`.
+
+    Otherwise, the `errorToken` is inserted between `errorTail->getNext()` and
+    `errorTail->getNext()->getPrevious()`, linking to both as follows:
+
+    Before insertion:
+    `... [ A ] <-> [ B ] <-> [ errorTail ] <-> [ C ] ...`
+
+    After insertion:
+    `... [ A ] <-> [ B ] <-> [ errorTail ] <-> [ errorToken ] <-> [ C ] ...`
+
+    After insertion, `errorToken` becomes the new `errorTail`.
+    */
+    void prependErrorToken(token::ErrorToken* errorToken);
+
+    // TODO: Add docs
+    void unterminatedString(
+        Int quoteChar,
+        std::size_t quoteStart,
+        std::size_t start,
+        bool asciiOnly,
+        bool isMultiline,
+        bool isRaw
+    );
+
+    // TODO: Add docs
+    void discardOpenLt();
+
+    // TODO: Add docs
+    void unmatchedBeginGroup(token::BeginToken* begin);
+
+    const token::type::TokenType*
+    closeBraceInfoFor(const token::BeginToken* token) const;
+
+    // TODO: Add docs
+    Int unexpected(Int character);
 
     /*
     A flag indicating whether character sequences '&&=' and '||=' should be
@@ -164,14 +375,26 @@ public:
     token::Token* tokens{nullptr};
 
     /*
-    A pointer to the most recently scanned token.
+    A pointer to the most recently scanned token that's also been appended to
+    the end of the token stream.
+
+    This may be a regular token, or an error token (in the case there was an
+    error).
     */
     token::Token* tail{nullptr};
 
     /*
-    A pointer to the most recently prepended error token.
+    A pointer to the most recently prepended error token in the stream.
+
+    This may or may not be the same as `tail`, depending on the situation. If
+    the most recently appended `tail` token is an error, then `errorToken` and
+    `tail` are the same.
+
+    If another error token needs to be inserted into the stream, it's inserted
+    between `errorTail` and `errorTail->getNext()` such that it links to both.
+
+    See `prependErrorToken()` for more.
     */
-    // TODO: Update docs once we know more about where error tokens are added.
     token::Token* errorTail{nullptr};
 
     token::Token* openBraceWithMissingEndForPossibleRecovery{nullptr};
@@ -193,18 +416,16 @@ public:
     token::Token* commentsTail{nullptr};
 
     // TODO: Add docs once we know how this works.
-    const util::Link<token::BeginToken> groupingStack{};
+    util::Link<token::BeginToken>* groupingStack{nullptr};
 
     bool inRecoveryOption;
 
+    // TODO: Add docs once we know how this works.
     std::size_t recoveryCount{0};
 
     bool allowLazyStrings;
 
 private:
-    // TODO: Add docs
-    Int scanHeaderLookingForLanguageVersion(Int next);
-
     bool enableTripleShift{true};
     bool enableAugmentations{false};
     bool _hasErrors{false};
