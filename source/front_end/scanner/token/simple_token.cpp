@@ -8,7 +8,7 @@ namespace token {
 void SimpleToken::setCommentParent(CommentToken* comment) {
     while (comment != nullptr) {
         comment->parent = this;
-        comment = dynamic_cast<CommentToken*>(comment->getNext());
+        comment = dynamic_cast<CommentToken*>(comment->getNext());  // TODO: Rewrite to avoid casting
     }
 }
 } // namespace token

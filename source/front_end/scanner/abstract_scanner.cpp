@@ -22,13 +22,14 @@ namespace scanner {
 namespace {
 using namespace token::chars;
 using namespace token::constants;
+using namespace token::type;
 
 using Int = Scanner<>::Int;
+
 using token::BeginToken;
 using token::ErrorToken;
 using token::NonAsciiIdentifierToken;
 using token::Token;
-using namespace token::type;
 
 using token::buildUnexpectedCharacterToken;
 } // namespace
@@ -50,16 +51,14 @@ void AbstractScanner::setConfiguration(const ScannerConfiguration* config) {
 }
 
 const Token* AbstractScanner::tokenize() {
-    while (!atEndOfFile()) {
-        Int next = scanHeaderLookingForLanguageVersion(advance());
-        while (next != $EOF) {
-            next = bigSwitch(next);
-        }
-
-        // Make sure we're at the end of file and append an EOF token.
-        assert::assert(atEndOfFile());
-        appendEofToken();
+    Int next = scanHeaderLookingForLanguageVersion(current());
+    while (next != $EOF) {
+        next = bigSwitch(next);
     }
+
+    // Make sure we're at the end of file and append an EOF token.
+    assert::assert(atEndOfFile());
+    appendEofToken();
 
     // Pretend there's an empty line at the end of the file
     lineStarts->add(getStringOffset() + 1);
@@ -375,6 +374,8 @@ Int AbstractScanner::tokenizeLanguageVersionOrSingleLineComment(Int next) {
 
     if (includeComments) {
         appendToCommentStream(versionToken);
+    } else {
+        delete versionToken;
     }
 
     return next;
@@ -688,7 +689,7 @@ void AbstractScanner::appendDartDoc(
 ) {
     if (!includeComments) return;
 
-    auto* newComment = createDartDocComment(type, start, asciiOnly);
+    auto* newComment = createDartDocToken(type, start, asciiOnly);
     appendToCommentStream(newComment);
 }
 
@@ -718,10 +719,14 @@ void AbstractScanner::appendToCommentStream(token::CommentToken* newComment) {
 
 void AbstractScanner::appendToken(Token* token) {
     tail->setNext(token);     // connect tail -> token
-    token->setPrevious(tail); // connect tail <- token
+    token->setPrevious(tail); // connect token -> tail
     tail = token;             // make token the new tail
 
-    // TODO: Test this out
+    /*
+    The current `comments` stream already belongs to the `token` being appended
+    to the stream aka the token already has it in its `precedingComments` field,
+    so remove it from the scanner.
+    */
     if (comments != nullptr && comments == token->getPrecedingComments()) {
         comments = nullptr;
         commentsTail = nullptr;

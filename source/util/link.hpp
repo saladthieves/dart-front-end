@@ -7,7 +7,7 @@ namespace util {
 template <typename T>
 class Link {
 public:
-    explicit Link(const T* head = nullptr, const Link<T>* tail = nullptr)
+    explicit Link(T* head = nullptr, Link<T>* tail = nullptr)
         : head{head},
           tail{tail} {}
 

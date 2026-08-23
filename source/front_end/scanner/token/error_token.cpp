@@ -36,7 +36,7 @@ buildUnexpectedCharacterToken(dart::u16 character, std::size_t offset) {
         case 0x202F: // Narrow no-break space.
         case 0x205F: // Medium mathematical space.
         case 0x3000: // Ideographic space.
-        case 0xFEFF: // Zero width no-break space.
+        case 0xFEFF: // (Byte Order Mark) Zero width no-break space.
             return new NonAsciiWhitespaceToken(character, offset);
 
         // It's some other non-ASCII character

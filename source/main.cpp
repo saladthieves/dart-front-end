@@ -1,6 +1,5 @@
-#include "common/log.hpp"
+#include "scanner/scanner_main.hpp"
 
 int main(int argc, const char* argv[]) {
-    dart::log::d("Hello, compiler-front-end world!");
-    return 0;
+    return dart::front_end::scanner::run(argc, argv);
 }

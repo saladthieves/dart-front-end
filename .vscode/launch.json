@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceRoot}/build/${config:binaryName}",
             "args": [
-
+                "./samples/hello.dart"
             ],
             "internalConsoleOptions": "neverOpen"
         },
@@ -17,7 +17,7 @@
             "request": "launch",
             "program": "${workspaceRoot}/build/${config:binaryName}",
             "args": [
-
+                "./samples/hello.dart"
             ],
             "internalConsoleOptions": "neverOpen",
             "preLaunchTask": "build-ninja-debug"
@@ -27,9 +27,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/build/${config:binaryName}",
-            "args": [
-
-            ],
+            "args": [],
             "internalConsoleOptions": "neverOpen",
             "preLaunchTask": "build-ninja-debug-clean"
         }

@@ -19,9 +19,12 @@ public:
         Token* eof =
             new SimpleToken{&type::END_OF_FILE, offset, precedingComments};
 
-        // And EOF points to itself, so there's always infinite prev/next.
-        eof->setPrevious(eof);
-        eof->setNext(eof);
+        /*
+        The Dart implementation has an EOF token point to itself, but in this
+        implementation, the EOF token points to nothing.
+        */
+        eof->setPrevious(nullptr);
+        eof->setNext(nullptr);
 
         return eof;
     }

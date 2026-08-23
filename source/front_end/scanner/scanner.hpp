@@ -1,8 +1,11 @@
 #pragma once
 
 #include "common/types.hpp"
+#include "token/comment_token.hpp"
 #include "token/token.hpp"
 
+#include <functional>
+#include <span>
 #include <vector>
 
 namespace dart {
@@ -53,7 +56,7 @@ public:
     )
         : tokens{tokens},
           lineStarts{lineStarts},
-          hasErrors{hasErrors} {}
+          hasErrors{hasErrors} { }
 
     // TODO: Add member docs
     const token::Token* tokens;
@@ -71,7 +74,7 @@ public:
 
     ScannerConfiguration(bool enableTripleShift, bool enableAugmentations)
         : enableTripleShift{enableTripleShift},
-          enableAugmentations{enableAugmentations} {}
+          enableAugmentations{enableAugmentations} { }
 
     /*
     Experimental flag to enable scanning '>>>' tokens.
@@ -122,7 +125,22 @@ public:
     virtual const token::Token* tokenize() = 0;
 };
 
-// TODO: Implement scan()
+/*
+Callback definition for a language version change.
+*/
+using LanguageVersionChanged = std::function<void(
+    const Scanner<>* scanner, const token::LanguageVersionToken* languageVersion
+)>;
+
+// TODO: Add docs
+void scan(
+    std::span<dart::u8> bytes,
+    ScannerConfiguration* configuration,
+    bool includeComments = false,
+    LanguageVersionChanged* languageVersionChanged = nullptr,
+    bool allowLazyStrings = true
+);
+
 } // namespace scanner
 } // namespace front_end
 } // namespace dart

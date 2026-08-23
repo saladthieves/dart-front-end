@@ -13,18 +13,11 @@
 #include "util/link.hpp"
 
 #include <cstddef>
-#include <functional>
+#include <memory>
 
 namespace dart {
 namespace front_end {
 namespace scanner {
-
-/*
-Callback definition for a language version change.
-*/
-using LanguageVersionChanged = std::function<void(
-    const Scanner<>* scanner, const token::LanguageVersionToken* languageVersion
-)>;
 
 // TODO: Organize function calls
 
@@ -49,7 +42,8 @@ class AbstractScanner : public Scanner<> {
           errorTail{newEofToken},
           includeComments{includeComments},
           languageVersionChanged{languageVersionChanged},
-          allowLazyStrings{allowLazyStrings} {
+          allowLazyStrings{allowLazyStrings},
+          groupingStack{new util::Link<token::BeginToken>()} {
         setConfiguration(config);
     }
 
@@ -70,10 +64,44 @@ public:
               allowLazyStrings
           ) { }
 
+          /*
     virtual ~AbstractScanner() override {
-        delete lineStarts; //
-    }
+        // Remove comments
+        if (comments != nullptr) {
+            token::Token* head = comments;
+            while (head != nullptr) {
+                auto* next = head->getNext();
+                delete head;
+                head = next;
+            }
+        }
 
+        // Remove tokens
+        if (tokens != nullptr) {
+            token::Token* head = tokens;
+            while (head != nullptr) {
+                if (head->getPrecedingComments() != nullptr) {
+                    token::Token* commentHead = head->getPrecedingComments();
+                    while (commentHead != nullptr) {
+                        auto* next = commentHead->getNext();
+                        delete commentHead;
+                        commentHead = next;
+                    }
+                }
+                auto* next = head->getNext();
+                delete head;
+                head = next;
+            }
+        }
+
+        // Delete groupingStack
+        delete groupingStack;
+
+        // Delete lineStarts
+        delete lineStarts;
+    }
+    */
+    
     virtual const LineStarts* getLineStarts() const override {
         return lineStarts;
     }
@@ -117,27 +145,46 @@ public:
     const token::Token* getFirstToken() { return tokens->getNext(); }
 
     /*
-    Skip past all spaces and returns the latest character that's not a space
-    character.
+    Skip past all spaces and returns the latest character that's not a space.
+
+    Spaces are strictly denoted by the $SP character, so other whitespace
+    characters (such as newline, carriage return) are not considered.
     */
     virtual Int skipSpaces() = 0;
 
-    // TODO: Add docs
+    /*
+    Advances the scanner to the next character and then returns that character.
+    Depending on the scanner implementation, the character may be a UTF-8 byte
+    or a UTF-16 code unit.
+
+    The implementation also ensures that if the scanner is already out of bounds
+    (past the end), an `$EOF` is returned.
+    */
     virtual Int advance() = 0;
 
     // TODO: Add docs
     Int advanceAfterError();
 
     // TODO: Add docs
-    virtual Int peek() = 0;
+    virtual Int peek() const = 0;
 
-    virtual Int current() = 0;
+    /*
+    Returns the current character which is also the same one `advance()`
+    previously returned.
+    */
+    virtual Int current() const = 0;
 
     // TODO: Add docs
     virtual Int currentAsUnicode(Int next) = 0;
 
-    // TODO: Add docs
-    virtual bool scanUntilLineEnd();
+    /*
+    Scans from the current byte offset advancing until reaching an end-of-line
+    (EOL) character or EOF, whichever comes first. An EOL character is either a
+    $LF (line feed) or a $CR (carriage return).
+
+    Returns `true` if only ASCII characters were skipped over, `false` if not.
+    */
+    virtual bool scanUntilLineEnd() = 0;
 
     // TODO: Add docs once we know how this works.
     virtual void handleUnicode(std::size_t startScanOffset) = 0;
@@ -211,7 +258,7 @@ public:
     Int tokenizeStringInterpolation(std::size_t start, bool asciiOnly);
 
     // TODO: Add docs
-    virtual token::DartDocComment* createDartDocComment(
+    virtual token::DartDocToken* createDartDocToken(
         const token::type::TokenType* type,
         std::size_t start,
         bool asciiOnly,
@@ -263,9 +310,7 @@ public:
     /*
     Append the given token to the `tail` of the current stream of tokens,
     linking both `tail` and `token` in both directions (`tail` -> `token` and
-    `token` -> `tail`).
-
-    After linking, `token` becomes the new `tail`.
+    `token` -> `tail`). After linking, `token` becomes the new `tail`.
     */
     void appendToken(token::Token* token);
 
@@ -362,7 +407,7 @@ public:
     different things, especially since one string character can be encoded with
     multiple UTF8 bytes.
     */
-    std::size_t tokenStart;
+    std::size_t tokenStart{0};
 
     /*
     A pointer to the token of streams created by the scanner as it tokenizes the
@@ -399,14 +444,16 @@ public:
 
     token::Token* openBraceWithMissingEndForPossibleRecovery{nullptr};
 
-    std::size_t offsetForCurlyBracketRecoveryStart;
+    std::size_t offsetForCurlyBracketRecoveryStart{0};
 
     /*
     A pointer to the stream of comment tokens created by this scanner, before
-    they are assigned to the `SimpleToken::precedingComments` field of a
-    non-comment token (that follows the comments).
+    they are assigned to a non-comment token via the 
+    `SimpleToken::precedingComments` field. Once added to a non-comment token,
+    this field is set to `nullptr` for more comments.
 
-    If there are no comment tokens, this field is `nullptr`.
+    If there are no comment tokens (or the field `includeComments` is false), 
+    this field is `nullptr`.
     */
     token::CommentToken* comments{nullptr};
 
@@ -429,7 +476,7 @@ private:
     bool enableTripleShift{true};
     bool enableAugmentations{false};
     bool _hasErrors{false};
-    LineStarts* lineStarts;
+    LineStarts* lineStarts{nullptr};
 };
 
 } // namespace scanner

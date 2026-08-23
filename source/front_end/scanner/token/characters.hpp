@@ -3,6 +3,9 @@
 #include "common/errors.hpp"
 #include "common/types.hpp"
 
+#include <array>
+#include <span>
+
 namespace dart {
 namespace front_end {
 namespace scanner {
@@ -136,19 +139,44 @@ The unicode replacement character U+FFFD aka �
 */
 inline constexpr dart::u16 $UNICODE_REPLACEMENT_CHAR = 0xFFFD;
 
-inline constexpr bool isDigit(const dart::u8 &code) {
+/*
+The byte order mode (BOM) bytes for UTF-8 character encoding.
+*/
+inline constexpr std::array<dart::u8, 3> BOM_UTF8{0xEF, 0xBB, 0xBF};
+
+inline constexpr bool isDigit(const dart::u8& code) {
     return $0 <= code && code <= $9;
 }
 
-inline constexpr bool isHexDigit(const dart::u8 &code) {
+inline constexpr bool isHexDigit(const dart::u8& code) {
     return std::isxdigit(code);
 }
 
-inline constexpr dart::u8 hexDigitValue(const dart::u8 &hex) {
+inline constexpr dart::u8 hexDigitValue(const dart::u8& hex) {
     assert::assert(isDigit(hex), "Character '{}' is not hexadecimal", hex);
 
     if (hex <= $9) return hex - $0;
     return (hex | ($a ^ $A)) - ($a - 10); // TODO: Learn how this works
+}
+
+/*
+Returns `true` if the Byte Order Mark (BOM) is contained in the `bytes`
+starting at the given offset, `false` otherwise.
+
+A BOM consists of the character code (U+FEFF) at the beginning of a data stream,
+such as a text file. Depending on how this code is encoded, it can indicate the
+encoding format of the stream (UTF-8, UTF-16 etc) or byte order (big/little
+endian).
+
+This implementation checks for the encoding of the first 3 bytes to be 0xEF,
+0xBB and 0xBF to signal that the data stream uses UTF-8 encoding.
+*/
+inline constexpr bool
+containsBOMAt(std::size_t offset, std::span<dart::u8> bytes) { // Usually 0
+    return offset + 2 < bytes.size() &&        // Make sure there's enough bytes
+           bytes[offset] == BOM_UTF8[0] &&     // 0xEF
+           bytes[offset + 1] == BOM_UTF8[1] && // 0xBB
+           bytes[offset + 2] == BOM_UTF8[2];   // 0xBF
 }
 } // namespace chars
 } // namespace token

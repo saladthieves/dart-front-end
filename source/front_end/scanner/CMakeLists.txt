@@ -6,6 +6,8 @@ target_sources(front_end_scanner
     PRIVATE
         abstract_scanner.cpp
         scanner.cpp
+        scanner_main.cpp
+        utf8_bytes_scanner.cpp
 
     PUBLIC
         FILE_SET HEADERS
