@@ -58,7 +58,7 @@ public:
               false,
               isTopLevelKeyword
           ),
-          keywordStyle{keywordStyle} {}
+          keywordStyle{keywordStyle} { }
 
     constexpr virtual bool isBuiltIn() const override {
         return keywordStyle == KeywordStyle::BUILTIN;

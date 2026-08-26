@@ -1,15 +1,26 @@
 #pragma once
 
-#include "keyword.hpp"
-
-#include "base/syntactic_entity.hpp"
 #include "token/token_type.hpp"
+
+#include <cstdint>
+#include <format>
+#include <initializer_list>
+#include <string>
+
+// TODO: Implement std::formatter<> for all Token types
 
 namespace dart {
 namespace front_end {
 namespace scanner {
 namespace token {
 // Forward declarations
+namespace keyword {
+class Keyword;
+}
+
+namespace type {
+class TokenType;
+}
 class CommentToken;
 
 /*
@@ -17,250 +28,268 @@ An interface representing a single token scanned from the input source text.
 Each token keeps track of which token comes before it and which comes after, in
 a doubly-linked list like structure.
 */
-class Token : public base::SyntacticEntity {
+/*
+Base class for all tokens processed by the scanner from the input source code.
+
+Each token keeps track of the token before and after it in a doubly-linked list,
+forming a stream of tokens.
+
+Design note: The Dart version of this class is a pure interface - it only lists
+field accessor methods (getters / setters) which are then implemented in derived
+classes by providing the appropriate concrete field. Most of these accessor
+methods do nothing other than get / set the field and some do the same work by
+reusing the same fields.
+
+This C++ implementation puts most of these fields (without any accessors) in
+this class with default values (`false` for booleans, `nullptr` for pointers and
+0 for integers). This makes the class hierarchy shorter (and simpler) to manage
+at the cost of increasing the size of each class and assigning (instead of
+initializing) the base fields from derived classes.
+*/
+// TODO: Add std::formatter<Token> specialization
+class Token {
 public:
-    // TODO: Add factory constructors
+    explicit Token(
+        const type::TokenType* type,
+        std::size_t beginOffset,
+        std::size_t length,
+        CommentToken* precedingComment = nullptr
+    )
+        : type{type},
+          beginOffset{beginOffset},
+          length{length},
+          _precedingComment{precedingComment} {
+        setCommentParent(precedingComment);
+    }
 
-    Token() = default;
+    virtual ~Token() = default;
 
-    // Token types (and sub-types) should not be copyable
-    Token(const Token& other) = delete;
-    Token& operator=(const Token& other) = delete;
+    std::string addr() const {
+        return std::format("{:X}", reinterpret_cast<std::uintptr_t>(this));
+    }
 
     /*
-    Returns the number of characters parsed by this token.
+    Sets the given `token` to be the next one in the stream, effectively linking
+    `this.next` to point to `token`:
+
+        `this.next` ---> `token`
+
+    If `setPrevious` is true, the linking also happens in reverse, linking
+    `token.prev` to point to `this`:
+
+        `this` <--- `token.prev`
+
+    Returns `token` after linking.
     */
-    virtual std::size_t getCharCount() const = 0;
+    Token* setNext(Token* token, bool setPrevious = true);
 
     /*
-    Returns the character offset of this token's start from the source text.
+    Returns the next token in the stream.
     */
-    virtual std::size_t getCharOffset() const = 0;
+    Token* next() const { return _next; }
 
     /*
-    Returns the character offset of this token's end from the source text.
+    Sets the given `token` to be the previous one in the stream, effectively
+    linking `this.prev` to point to `token`:
+
+        `token` <--- `this.prev`
+
+    Unlike `setNext()`, the reverse linking does not take place.
+
+    Returns `token` after linking.
     */
-    virtual std::size_t getCharEnd() const = 0;
+    Token* setPrev(Token* token);
 
     /*
-    Returns the synthetic token before `this` token, or nullptr if this token is
-    not a synthetic ')', ']', '}' or '>' token.
+    Returns the previous token in the stream.
     */
-    virtual const Token* getBeforeSynthetic() const = 0;
+    Token* prev() const { return _prev; }
 
     /*
-    Sets the provided token before `this` synthetic ')', ']', '}' or '>' token,
-    or ignored otherwise.
+    Sets the `precedingComment` to the provided `comment` value.
+
+    Once set, the `precedingComment` and any subsequent comments linked to it
+    will all have their `parent` field set to `this`.
     */
-    virtual void setBeforeSynthetic(const Token* previous) = 0;
-
-    virtual std::size_t getEnd() const override = 0;
+    void setPrecedingComment(CommentToken* comment);
 
     /*
-    Returns the token that corresponds to this one, or `nullptr` if this token
-    is not the first in a matching pair group of tokens, such as in parentheses.
+    Returns the first comment in a stream of comments that precede `this` token,
+    or `nullptr` if no comments precede `this` token.
 
-    For example, if this token represents a '(' token, 'getEndGroup()' will
-    return the corresponding closing ')' token. If this token is a ')' token or
-    something else, then 'getEndGroup()' will return `nullptr`.
+    Let's assume that after scanning the following source code, `this` token
+    represents the `class` keyword after 2 comments:
+    `// one`
+    `// two`
+    `class`   <-- `this` token
+
+    Calling `precedingComment()` returns a `CommentToken` pointing to the first
+    comment `// one`. Calling `next()` on that returns a `CommentToken` pointing
+    to the second comment, `// two`. Calling `next()` on that returns `nullptr`
+    as there are no more comments afterwards.
+
+    Both `CommentToken` objects will have their `parent` field set to `this` as
+    their parent.
     */
-    virtual const Token* getEndGroup() const { return nullptr; }
+    CommentToken* precedingComment() const { return _precedingComment; }
 
     /*
-    Returns `true` if this token is an end of file, `false` if not.
-    */
-    virtual bool isEof() const = 0;
-
-    /*
-    Returns `true` if this token is an identifier, `false` otherwise. This may
-    also be a keyword (such as `PSEUDO`) depending on its usage context.
-    */
-    virtual bool isIdentifier() const = 0;
-
-    /*
-    Returns `true` if this token is a keyword, `false` otherwise.
-    */
-    virtual bool isKeyword() const = 0;
-
-    /*
-    Returns `true` if this token is a keyword or identifier, `false` otherwise.
-    */
-    virtual bool isKeywordOrIdentifier() const = 0;
-
-    /*
-    Returns `true` if this token is a modifier (such as `const`, `static`,
-    `final`, `abstract` etc), or `false` if not.
-    */
-    virtual bool isModifier() const = 0;
-
-    /*
-    Returns `true` if this token represents an operator, `false` otherwise.
-    */
-    virtual bool isOperator() const = 0;
-
-    /*
-    Returns `true` if this token is a synthetic one, `false` otherwise.
-    A synthetic token is a token introduced / inserted into the source by the
-    parser in order to recover from an error in the code.
-
-    It typically has a length of zero i.e.: `getLength()` returns zero.
-    */
-    virtual bool isSynthetic() const = 0;
-
-    /*
-    Returns `true` if this is a keyword used in a top-level declaration, `false`
-    otherwise. Top-level declaration keywords include `class`, `enum`, `import`
-    etc.
-    */
-    virtual bool isTopLevelKeyword() const = 0;
-
-    /*
-    Returns `true` if this is a user-definable operator (such as `PLUS` etc),
+    Returns `true` if `this` token's `type` is in any of the provided `types`,
     `false` otherwise.
     */
-    virtual bool isUserDefinableOperator() const = 0;
+    bool matchesAny(std::initializer_list<const type::TokenType*> types) const;
 
     /*
-    Returns the corresponding `Keyword` (if this is a keyword token), `nullptr`
-    if not.
+    Returns `true` if `this` token's `type` is the same as the provided
+    parameter value, `false` otherwise.
     */
-    virtual const keyword::Keyword* getKeyword() const = 0;
-
-    // TODO: Add docs after `getType()`
-    virtual dart::u8 getKind() const = 0;
-
-    virtual std::size_t getLength() const override = 0;
+    bool isA(const type::TokenType* type) const { return this->type == type; }
 
     /*
-    Returns the lexeme that represents this token.
-
-    For `StringToken` types, this includes the quotation mmarks, explicit
-    escapes etc.
-    */
-    // TODO: Check if this should be std::string instead.
-    virtual std::string_view getLexeme() const = 0;
-
-    /*
-    Returns the next token in the token stream.
-    */
-    virtual Token* getNext() const = 0;
-
-    /*
-    Sets the next token in the token stream.
-
-    This only modifies the `next` field internally.
-    */
-    virtual void setNext(Token* next) = 0;
-
-    virtual std::size_t getOffset() const override = 0;
-
-    /*
-    Sets the offset from the beginning of the file to the first character of the
+    The offset from the start of the source code to the first character of this
     token.
     */
-    virtual void setOffset(std::size_t offset) = 0;
+    std::size_t beginOffset{0};
 
     /*
-    Returns the first in the list of comments tokens that precede this token,
-    or `nullptr` if no comment tokens precede this token. Subsequent comment
-    tokens in the stream can be reached with `getNext()` (on the comment token)
-    until `nullptr` is returned.
+    The number of characters in this token.
 
-    Given a source input of two comments preceding `this` token:
-    `// first`
-
-    `// second`
-    
-    `[token]`   <-- this token
-    
-    Calling `getPrecedingComments()` will return `// first`. Calling it again
-    will return `// second`. Calling it a third time will return `nullptr` since
-    there are no more comment tokens before `this`.
+    This is equivalent to `endOffset` - `beginOffset`.
     */
-    virtual CommentToken* getPrecedingComments() const = 0;
+    std::size_t length{0};
 
     /*
-    Returns the previous token in the token stream.
+    The offset from the start of the source code to one position past the last
+    character of this token.
     */
-    virtual Token* getPrevious() const = 0;
+    std::size_t endOffset{0};
 
     /*
-    Sets the previous token in the token stream.
-
-    This only modifies the `previous` field internally.
+    The token directly before `this` synthetic token, or `nullptr` if `this` is
+    not a synthetic `)`, `]`, `}` or `>` token.
     */
-    virtual void setPrevious(Token* previous) = 0;
-
-    // TODO: Add docs after understanding implementation.
-    virtual const char* getStringValue() const = 0;
+    Token* beforeSynthetic{nullptr};
 
     /*
-    Returns the `TokenType` associated with this token.
+    The token that corresponds to `this` one, or `nullptr` if this token is not
+    the first in a matching pair group of tokens (such as in parentheses).
+
+    For example, if `this` token is an opening `(` token, then `endToken` is its
+    closing `)` token. However if this token is an opening `(` token (or some
+    other token), then `endToken` will be `nullptr`.
     */
-    virtual const type::TokenType* getType() const = 0;
+    Token* endToken{nullptr};
 
     /*
-    Returns the `TokenType::index` value of the `TokenType` object associated
-    with this token.
+    The `TokenType` associated with this token.
+
+    This may be a keyword, identifier etc.
     */
-    virtual dart::u8 getTypeIndex() const = 0;
+    const type::TokenType* type{nullptr};
 
     /*
-    Returns `true` if this token's `TokenType` is in any of the given types,
+    The lexeme associated with this token as scanned from the source code.
+
+    For typess such as `StringToken`, string quotation marks are included.
+    */
+    std::string lexeme{};
+
+    /*
+    The string value associated with this token.
+
+    For symbols and keywords, the value is the token type / keyword associated
+    with it. For `StringToken` types it's an empty string.
+    */
+    std::string_view stringValue{""};
+
+    /*
+    `true` if this token is an EOF (end-of-file), `false` otherwise.
+    */
+    bool isEof : 1 {false};
+
+    /*
+    `true` if this token is an identifier, `false` otherwise.
+
+    Some keywords may also be identifiers depending on the context.
+    */
+    bool isIdentifier : 1 {false};
+
+    /*
+    `true` if this token is a keyword, `false` otherwise.
+    */
+    bool isKeyword : 1 {false};
+
+    /*
+    `true` if this token is a keyword or identifier, `false` otherwise.
+    */
+    bool isKeywordOrIdentifier : 1 {false};
+
+    /*
+    `true` if this token is a modifier (such as `const`, `static`, `final` etc),
     `false` otherwise.
     */
-    virtual bool
-    matchesAny(std::initializer_list<const type::TokenType*> types) const = 0;
+    bool isModifier : 1 {false};
 
     /*
-    Sets the next token in the token stream to be the parameter, returning back
-    the parameter to the caller.
-
-    This links both `this` token and the one passed in by connecting:
-        - `this` token's `next` value to the parameter.
-        - the parameter's `previous` value to `this`.
+    `true` if this token is an operator, `false` otherwise.
     */
-    virtual Token* setNextToken(Token* token) = 0;
+    bool isOperator : 1 {false};
 
     /*
-    Sets the next token in the token stream to be the parameter, returning back
-    the parameter to the caller.
+    `true` if this token is a synthetic one, `false` otherwise.
 
-    This only links `this` token to the one passed in by:
-        - connecting `this` token's `next` value to the parameter.
-        - leaving the parameter's `previous` value unchanged.
+    A synthetic token is introduced / inserted into the token stream by the
+    parser to help recover from an error.
+
+    Since synthetic tokens aren't scanned from the source, they have a `length`
+    of zero.
     */
-    virtual Token* setNextWithoutSettingPrevious(Token* token) = 0;
-
-    // TODO: Implement std::formatter<Token> per base
-
-    // TODO: Implement Object::value()
+    bool isSynthetic : 1 {false};
 
     /*
-    Returns `true` if the token type associated with `this` token is the same as
-    the provided token type, `false` if not.
+    `true` if this token is a keyword used in a top-level declaration, `false`
+    otherwise. Top-level declaration keywords include the likes of `class`,
+    `enum`, `import` etc.
     */
-    bool isA(const type::TokenType* type) const { return getType()->isA(type); }
+    bool isTopLevelKeyword : 1 {false};
 
     /*
-    Returns the token (from the given list) that appears first (left-most) in
-    the source code, or `nullptr` if the list is empty.
-
-    A token appears first (left-most) in the source code if it has the smallest
-    offset from the start of the source code.
+    `true` if this token is a user-definable operator (such as `+`) on classes,
+    mixins etc, `false` otherwise.
     */
-    static const Token*
-    lexicallyFirst(std::initializer_list<const Token*> tokens) {
-        const Token* result{nullptr};
-        for (const Token* token : tokens) {
-            if (result == nullptr || token->getOffset() < result->getOffset()) {
-                result = token;
-            }
-        }
+    bool isUserDefinableOperator : 1 {false};
 
-        return result;
-    }
+    /*
+    Initializes some of the derived fields.
+
+    This needs to be called as the last statement in the derived class'
+    constructor body to properly initialize the rest of the class.
+    */
+    void init();
+
+private:
+    /*
+    Sets the `CommentToken::parent` value of the given `comment` to `this`.
+
+    All subsequent comments in the stream (arrived via `comment->next()`) will
+    also have their `parent` field set to `this`.
+    */
+    void setCommentParent(CommentToken* comment);
+
+    Token* _next{nullptr};
+    Token* _prev{nullptr};
+    CommentToken* _precedingComment{nullptr};
 };
+
+/*
+Returns the left-most token from the provided list of `tokens`.
+
+A token is left-most if it appears first in the source code. This also means it
+has the smallest `Token::beginOffset` value from all other tokens in the list.
+
+A `nullptr` is returned if the list is empty or only contains `nullptr` values.
+*/
+const Token* lexicallyFirst(std::initializer_list<const Token*> tokens);
 } // namespace token
 } // namespace scanner
 } // namespace front_end

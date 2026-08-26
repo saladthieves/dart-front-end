@@ -1,8 +1,10 @@
 #pragma once
 
 #include "comment_token.hpp"
-#include "token/simple_token.hpp"
+#include "token/token.hpp"
+
 #include "token/token_type.hpp"
+#include "token/token_types.hpp"
 
 namespace dart {
 namespace front_end {
@@ -15,26 +17,32 @@ public:
     offset.
     */
     static Token*
-    eof(std::size_t offset, CommentToken* precedingComments = nullptr) {
-        Token* eof =
-            new SimpleToken{&type::END_OF_FILE, offset, precedingComments};
-
+    eof(std::size_t beginOffset, CommentToken* precedingComment = nullptr) {
         /*
-        The Dart implementation has an EOF token point to itself, but in this
-        implementation, the EOF token points to nothing.
+        The Dart implementation of this factory constructor has the previous and
+        next point to the same instance. In this implementation, they point to
+        `nullptr`.
         */
-        eof->setPrevious(nullptr);
-        eof->setNext(nullptr);
-
+        auto* eof = new Token{
+            &type::END_OF_FILE, beginOffset, type::END_OF_FILE.lexeme.length(),
+            precedingComment
+        };
+        eof->init();
+        
         return eof;
     }
 
-    static SimpleToken* simple(
+    /*
+    Creates and returns a simple token with the provided `type`, `beginOffset`,
+    `length` and optional `precedingComment` values.
+    */
+    static Token* create(
         const type::TokenType* type,
-        std::size_t offset,
-        CommentToken* precedingComments = nullptr
+        std::size_t beginOffset,
+        std::size_t length,
+        CommentToken* precedingComment = nullptr
     ) {
-        return new SimpleToken(type, offset, precedingComments);
+        return new Token{type, beginOffset, length, precedingComment};
     }
 };
 

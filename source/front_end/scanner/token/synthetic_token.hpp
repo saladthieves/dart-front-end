@@ -2,7 +2,6 @@
 
 #include "begin_token.hpp"
 #include "keyword_token.hpp"
-#include "simple_token.hpp"
 #include "string_token.hpp"
 
 namespace dart {
@@ -16,25 +15,18 @@ A synthetic token is one that's generated / inserted into the stream (such as
 by a parser to recover from errors), and not one that originates from the source
 code.
 */
-class SyntheticToken : public SimpleToken {
+class SyntheticToken : public Token {
 public:
     explicit SyntheticToken(
         const type::TokenType* type,
-        std::size_t offset,
+        std::size_t beginOffset,
         const Token* beforeSynthetic = nullptr
     )
-        : SimpleToken(type, offset),
-          beforeSynthetic{beforeSynthetic} { }
+        : Token(type, beginOffset, 0),
+          beforeSynthetic{beforeSynthetic} {
+        init();
+    }
 
-    virtual const Token* getBeforeSynthetic() const override {
-        return beforeSynthetic;
-    };
-
-    virtual bool isSynthetic() const override { return true; }
-
-    virtual std::size_t getLength() const override { return 0; }
-
-private:
     const Token* beforeSynthetic{nullptr};
 };
 
@@ -48,19 +40,13 @@ one.
 class ReplacementToken : public SyntheticToken {
 public:
     explicit ReplacementToken(
-        const type::TokenType* type, const Token* replacedToken
+        const type::TokenType* type, //
+        const Token* replacedToken,
+        const Token* beforeSynthetic = nullptr
     )
-        : SyntheticToken(type, replacedToken->getOffset()),
+        : SyntheticToken{type, replacedToken->beginOffset, beforeSynthetic},
           replacedToken{replacedToken} {
-        setPrecedingComments(replacedToken->getPrecedingComments());
-    }
-
-    virtual const Token* getBeforeSynthetic() const override {
-        return beforeSynthetic;
-    }
-
-    virtual void setBeforeSynthetic(const Token* previous) override {
-        beforeSynthetic = previous;
+        setPrecedingComment(replacedToken->precedingComment());
     }
 
     /*
@@ -68,9 +54,6 @@ public:
     This will normally correspond to what the user originally typed in.
     */
     const Token* replacedToken;
-
-private:
-    const Token* beforeSynthetic{nullptr};
 };
 
 /*
@@ -80,25 +63,10 @@ class SyntheticBeginToken : public BeginToken {
 public:
     explicit SyntheticBeginToken(
         const type::TokenType* type,
-        std::size_t offset,
+        std::size_t beginOffset,
         CommentToken* precedingComment = nullptr
     )
-        : BeginToken(type, offset, precedingComment) { }
-
-    virtual const Token* getBeforeSynthetic() const override {
-        return beforeSynthetic;
-    }
-
-    virtual void setBeforeSynthetic(const Token* previous) override {
-        beforeSynthetic = previous;
-    }
-
-    virtual bool isSynthetic() const override { return true; }
-
-    virtual std::size_t getLength() const override { return 0; }
-
-private:
-    const Token* beforeSynthetic{nullptr};
+        : BeginToken(type, beginOffset, 0, precedingComment) { }
 };
 
 /*
@@ -107,22 +75,10 @@ A synthetic version of a keyword token.
 class SyntheticKeywordToken : public KeywordToken {
 public:
     explicit SyntheticKeywordToken(
-        const type::TokenType* keyword, std::size_t offset
+        const type::TokenType* keyword, //
+        std::size_t beginOffset
     )
-        : KeywordToken(keyword, offset) { }
-
-    virtual const Token* getBeforeSynthetic() const override {
-        return beforeSynthetic;
-    }
-
-    virtual void setBeforeSynthetic(const Token* previous) override {
-        beforeSynthetic = previous;
-    }
-
-    virtual std::size_t getLength() const override { return 0; }
-
-private:
-    const Token* beforeSynthetic{nullptr};
+        : KeywordToken(keyword, beginOffset) { }
 };
 
 /*
@@ -132,34 +88,10 @@ class SyntheticStringToken : public StringToken {
 public:
     explicit SyntheticStringToken(
         const type::TokenType* type,
-        std::string_view value,
-        std::size_t offset,
-        bool useLength = false,
-        std::size_t length = 0
+        std::size_t beginOffset,
+        std::string_view stringValue
     )
-        : StringToken(type, value, offset),
-          useLength{useLength},
-          length{length} { }
-
-    virtual const Token* getBeforeSynthetic() const override {
-        return beforeSynthetic;
-    }
-
-    virtual void setBeforeSynthetic(const Token* previous) override {
-        beforeSynthetic = previous;
-    }
-
-    virtual bool isSynthetic() const override { return true; }
-
-    virtual std::size_t getLength() const override {
-        return useLength ? length : StringToken::getLength();
-    }
-
-private:
-    const Token* beforeSynthetic{nullptr};
-
-    bool useLength{false};
-    std::size_t length{0};
+        : StringToken{type, beginOffset, stringValue, 0} { }
 };
 } // namespace token
 } // namespace scanner

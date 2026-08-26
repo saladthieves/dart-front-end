@@ -3,7 +3,6 @@
 #include "token/characters.hpp"
 #include "token/comment_token.hpp"
 #include "token/synthetic_token.hpp"
-#include "token/token_impl.hpp"
 #include "token/token_type.hpp"
 
 namespace dart {
@@ -268,10 +267,14 @@ StringToken* Utf8BytesScanner::createSubstringToken(
     std::size_t extraOffset,
     bool allowLazy
 ) {
-    const auto end = byteOffset + extraOffset;
-    return new token::StringTokenImpl{
-        type, bytes.subspan(start, end - start), asciiOnly, tokenStart,
-        comments, allowLazy
+    return new token::StringToken{
+        type,
+        bytes,
+        start,
+        byteOffset + extraOffset,
+        tokenStart,
+        asciiOnly,
+        comments,
     };
 }
 
@@ -282,7 +285,9 @@ StringToken* Utf8BytesScanner::createSyntheticSubstringToken(
     std::string_view syntheticChars
 ) {
     return new token::SyntheticStringToken{
-        type, syntheticChars, tokenStart, true
+        type,
+        start,
+        syntheticChars,
     };
 }
 
@@ -292,12 +297,13 @@ CommentToken* Utf8BytesScanner::createCommentToken(
     bool asciiOnly,
     std::size_t extraOffset
 ) {
-    const auto end = byteOffset + extraOffset;
-    return new token::CommentTokenImpl{
+    return new token::CommentToken{
         type,
-        bytes.subspan(start, end - start),
-        asciiOnly,
+        bytes,
+        start,
+        byteOffset + extraOffset,
         tokenStart,
+        asciiOnly,
     };
 }
 
@@ -308,16 +314,26 @@ DartDocToken* Utf8BytesScanner::createDartDocToken(
     std::size_t extraOffset
 ) {
     const auto end = byteOffset + extraOffset;
-    return new token::DartDocToken(
-        type, bytes.subspan(start, end - start), asciiOnly, tokenStart
-    );
+    return new token::DartDocToken{
+        type,
+        bytes,
+        start,
+        byteOffset + extraOffset,
+        tokenStart,
+        asciiOnly,
+    };
 }
 
 LanguageVersionToken* Utf8BytesScanner::createLanguageVersionToken(
     std::size_t start, dart::u8 major, dart::u8 minor
 ) {
-    return new token::LanguageVersionTokenImpl{
-        bytes.subspan(start, byteOffset), false, start, major, minor
+    return new token::LanguageVersionToken{
+        bytes,
+        start,
+        byteOffset,
+        tokenStart,
+        major,
+        minor,
     };
 }
 

@@ -8,7 +8,6 @@
 #include "token/string_token.hpp"
 #include "token/token.hpp"
 #include "token/token_factory.hpp"
-#include "token/token_impl.hpp"
 #include "token/token_type.hpp"
 #include "util/link.hpp"
 
@@ -19,7 +18,8 @@ namespace dart {
 namespace front_end {
 namespace scanner {
 
-// TODO: Organize function calls
+// TODO: Remove unnecessary getter / setter methods
+// TODO: Rename getter methods to remove `get`
 
 /*
 Abstract implementation of a scanner.
@@ -64,44 +64,44 @@ public:
               allowLazyStrings
           ) { }
 
-          /*
-    virtual ~AbstractScanner() override {
-        // Remove comments
-        if (comments != nullptr) {
-            token::Token* head = comments;
-            while (head != nullptr) {
-                auto* next = head->getNext();
-                delete head;
-                head = next;
-            }
-        }
+    /*
+virtual ~AbstractScanner() override {
+  // Remove comments
+  if (comments != nullptr) {
+      token::Token* head = comments;
+      while (head != nullptr) {
+          auto* next = head->getNext();
+          delete head;
+          head = next;
+      }
+  }
 
-        // Remove tokens
-        if (tokens != nullptr) {
-            token::Token* head = tokens;
-            while (head != nullptr) {
-                if (head->getPrecedingComments() != nullptr) {
-                    token::Token* commentHead = head->getPrecedingComments();
-                    while (commentHead != nullptr) {
-                        auto* next = commentHead->getNext();
-                        delete commentHead;
-                        commentHead = next;
-                    }
-                }
-                auto* next = head->getNext();
-                delete head;
-                head = next;
-            }
-        }
+  // Remove tokens
+  if (tokens != nullptr) {
+      token::Token* head = tokens;
+      while (head != nullptr) {
+          if (head->getPrecedingComments() != nullptr) {
+              token::Token* commentHead = head->getPrecedingComments();
+              while (commentHead != nullptr) {
+                  auto* next = commentHead->getNext();
+                  delete commentHead;
+                  commentHead = next;
+              }
+          }
+          auto* next = head->getNext();
+          delete head;
+          head = next;
+      }
+  }
 
-        // Delete groupingStack
-        delete groupingStack;
+  // Delete groupingStack
+  delete groupingStack;
 
-        // Delete lineStarts
-        delete lineStarts;
-    }
-    */
-    
+  // Delete lineStarts
+  delete lineStarts;
+}
+*/
+
     virtual const LineStarts* getLineStarts() const override {
         return lineStarts;
     }
@@ -142,7 +142,7 @@ public:
     void beginToken() { tokenStart = getStringOffset(); }
 
     // TODO: Add docs
-    const token::Token* getFirstToken() { return tokens->getNext(); }
+    const token::Token* getFirstToken() { return tokens->next(); }
 
     /*
     Skip past all spaces and returns the latest character that's not a space.
@@ -332,7 +332,11 @@ public:
 
     // TODO: Add docs
     void appendPrecedenceToken(const token::type::TokenType* type) {
-        appendToken(token::TokenFactory::simple(type, tokenStart, comments));
+        appendToken(
+            token::TokenFactory::create(
+                type, tokenStart, type->lexeme.length(), comments
+            )
+        );
     }
 
     // TODO: Add docs
@@ -448,11 +452,11 @@ public:
 
     /*
     A pointer to the stream of comment tokens created by this scanner, before
-    they are assigned to a non-comment token via the 
+    they are assigned to a non-comment token via the
     `SimpleToken::precedingComments` field. Once added to a non-comment token,
     this field is set to `nullptr` for more comments.
 
-    If there are no comment tokens (or the field `includeComments` is false), 
+    If there are no comment tokens (or the field `includeComments` is false),
     this field is `nullptr`.
     */
     token::CommentToken* comments{nullptr};

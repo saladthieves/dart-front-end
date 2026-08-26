@@ -1,24 +1,32 @@
 #pragma once
 
-#include "simple_token.hpp"
+#include "token.hpp"
+
+#include "common/errors.hpp"
+#include "token_types.hpp"
 
 namespace dart {
 namespace front_end {
 namespace scanner {
 namespace token {
+
 /*
-A `SimpleToken` that represents the opening half of a grouping pair of tokens.
+A token that represents the opening half of a grouping pair of tokens.
+
 This is used for the opening parentheses '(', curly bracket '{', and square
-bracket '[' tokens.
+bracket '[' tokens. The corresponding closing token is found in the `endToken`
+field.
 */
-class BeginToken : public SimpleToken {
+class BeginToken : public Token {
 public:
     explicit BeginToken(
         const type::TokenType* type,
-        std::size_t offset,
+        std::size_t beginOffset,
+        std::size_t length,
         CommentToken* precedingComment = nullptr
     )
-        : SimpleToken(type, offset, precedingComment) {
+        : Token{type, beginOffset, length, precedingComment} {
+        // TODO: Add assertion error after support for std::formatter<TokenType>
         assert::assert(
             type == &type::LT ||                 //
             type == &type::OPEN_CURLY_BRACKET || //
@@ -26,19 +34,9 @@ public:
             type == &type::OPEN_SQUARE_BRACKET ||
             type == &type::STRING_INTERPOLATION_EXPRESSION
         );
+
+        init();
     }
-
-    virtual const Token* getEndGroup() const override { return endToken; }
-
-    /*
-    Sets the token that corresponds to this token's other half.
-    */
-    void setEndGroup(const Token* token) { endToken = token; }
-
-    /*
-    The other half token that corresponds to this token.
-    */
-    const Token* endToken{nullptr};
 };
 } // namespace token
 } // namespace scanner

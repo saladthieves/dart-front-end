@@ -10,7 +10,6 @@
 #include "token/synthetic_token.hpp"
 #include "token/token_constants.hpp"
 #include "token/token_factory.hpp"
-#include "token/token_impl.hpp"
 #include "token/token_types.hpp"
 
 #include <format>
@@ -71,7 +70,7 @@ Int AbstractScanner::scanHeaderLookingForLanguageVersion(Int next) {
 
     Token* oldTail = tail;
     next = bigHeaderSwitch(next);
-    if (next != $EOF && tail->getKind() == SCRIPT_TOKEN) {
+    if (next != $EOF && tail->type->kind == SCRIPT_TOKEN) {
         oldTail = tail;
         next = bigHeaderSwitch(next);
     }
@@ -710,24 +709,24 @@ void AbstractScanner::appendToCommentStream(token::CommentToken* newComment) {
     } else {
         // Link `newComment` and `commentsTail` to each other.
         commentsTail->setNext(newComment);
-        commentsTail->getNext()->setPrevious(commentsTail);
+        commentsTail->next()->setPrev(commentsTail);
 
         // Make `newComment` the new tail
-        commentsTail = commentsTail->getNext();
+        commentsTail = commentsTail->next();
     }
 }
 
 void AbstractScanner::appendToken(Token* token) {
-    tail->setNext(token);     // connect tail -> token
-    token->setPrevious(tail); // connect token -> tail
-    tail = token;             // make token the new tail
+    tail->setNext(token); // connect tail -> token
+    token->setPrev(tail); // connect token -> tail
+    tail = token;         // make token the new tail
 
     /*
     The current `comments` stream already belongs to the `token` being appended
-    to the stream aka the token already has it in its `precedingComments` field,
+    to the stream aka the token already has it in its `_precedingComment` field,
     so remove it from the scanner.
     */
-    if (comments != nullptr && comments == token->getPrecedingComments()) {
+    if (comments != nullptr && comments == token->precedingComment()) {
         comments = nullptr;
         commentsTail = nullptr;
     } else {
@@ -737,7 +736,7 @@ void AbstractScanner::appendToken(Token* token) {
         */
         assert::assert(
             comments == nullptr || //
-            token->isSynthetic() ||
+            token->isSynthetic ||  //
             (dynamic_cast<ErrorToken*>(token) != nullptr)
         );
     }
@@ -793,25 +792,25 @@ void AbstractScanner::prependErrorToken(ErrorToken* errorToken) {
         errorTail = tail;        // and update errorTail to be in sync
     } else {
         /*
-        Connect `errorToken` and `errorTail->getNext()` together:
+        Connect `errorToken` and `errorTail->next()` together [right-hand side]:
 
-            errorToken => errorTail->getNext()
-            errorToken <= errorTail->getNext()
+            errorToken => errorTail->next()
+            errorToken <= errorTail->next()
         */
-        errorToken->setNext(errorTail->getNext());
-        errorToken->getNext()->setPrevious(errorToken);
+        errorToken->setNext(errorTail->next());
+        errorToken->next()->setPrev(errorToken);
 
         /*
-        Connect `errorTail` and `errorToken` together:
+        Connect `errorTail` and `errorToken` together [left-hand side]:
 
             errorTail => errorToken
             errorTail <= errorToken
         */
         errorTail->setNext(errorToken);
-        errorToken->setPrevious(errorTail);
+        errorToken->setPrev(errorTail);
 
         // Finally update errorTail to errorToken
-        errorTail = errorTail->getNext();
+        errorTail = errorTail->next();
     }
 }
 
@@ -835,14 +834,12 @@ void AbstractScanner::unterminatedString(
     // Report the error on a visible token
     const auto offset = getStringOffset();
     std::size_t errorStart = tokenStart < offset ? tokenStart : quoteStart;
-    prependErrorToken(
-        new token::UnterminatedString(prefix, errorStart, offset)
-    );
+    prependErrorToken(new token::UnterminatedString(errorStart, prefix));
 }
 
 void AbstractScanner::discardOpenLt() {
     while (groupingStack->isNotEmpty() &&
-           groupingStack->head->getKind() == LT_TOKEN) {
+           groupingStack->head->type->kind == LT_TOKEN) {
         auto* head = groupingStack->head;
         groupingStack = groupingStack->tail;
         delete head;
@@ -852,14 +849,14 @@ void AbstractScanner::discardOpenLt() {
 void AbstractScanner::unmatchedBeginGroup(token::BeginToken* begin) {
     const auto* type = closeBraceInfoFor(begin);
     appendToken(new token::SyntheticToken(type, tokenStart, tail));
-    begin->setEndGroup(tail);
+    begin->endToken = tail;
     prependErrorToken(new token::UnmatchedToken(begin));
     ++recoveryCount;
 }
 
 const TokenType*
 AbstractScanner::closeBraceInfoFor(const BeginToken* token) const {
-    const auto lexeme = token->getLexeme();
+    const auto& lexeme = token->lexeme;
     if (lexeme == "(") return &token::type::CLOSE_PAREN;
     if (lexeme == "[") return &token::type::CLOSE_SQUARE_BRACKET;
     if (lexeme == "{") return &token::type::CLOSE_CURLY_BRACKET;
@@ -877,31 +874,33 @@ Int AbstractScanner::unexpected(Int character) {
 
     // The error is related to a non-ASCII identifier character
     if (dynamic_cast<NonAsciiIdentifierToken*>(errorToken)) {
-        std::size_t charOffset;
-        std::string value;
+        std::size_t beginOffset;
+        std::string stringValue;
 
         if (tail->isA(&token::type::IDENTIFIER) &&
-            tokenStart == tail->getCharEnd()) {
-            charOffset = tail->getCharOffset(); // Start of tail
-            value = tail->getLexeme();
-            tail = tail->getPrevious();
+            tokenStart == tail->beginOffset) {
+            beginOffset = tail->beginOffset; // Start of tail
+            stringValue = tail->lexeme;
+            tail = tail->prev();             // TODO: Delete disconnected token
         } else {
-            charOffset = errorToken->getCharOffset();
+            beginOffset = errorToken->beginOffset;
         }
 
-        value += errorToken->getCharacter();
+        stringValue += errorToken->character();
         prependErrorToken(errorToken);
 
         Int next = advanceAfterError();
         while (internal_utils::isIdentifierChar(next, true)) {
-            value += next;
+            stringValue += next;
             next = advance();
         }
 
-        auto* token = new token::StringTokenImpl(
-            &token::type::IDENTIFIER, value, charOffset, comments
-        );
+        auto* token = new token::StringToken{
+            &token::type::IDENTIFIER, beginOffset, stringValue,
+            stringValue.length(), comments
+        };
         appendToken(token);
+
         return next;
     } else {
         // It's some other character error. Add it to the stream and advance.

@@ -164,7 +164,7 @@ Returns `true` if the Byte Order Mark (BOM) is contained in the `bytes`
 starting at the given offset, `false` otherwise.
 
 A BOM consists of the character code (U+FEFF) at the beginning of a data stream,
-such as a text file. Depending on how this code is encoded, it can indicate the
+such as a text file. Depending on the encoding, the code can indicate the
 encoding format of the stream (UTF-8, UTF-16 etc) or byte order (big/little
 endian).
 

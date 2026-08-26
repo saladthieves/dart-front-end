@@ -1,36 +1,27 @@
 #pragma once
 
-#include "simple_token.hpp"
+#include "comment_token.hpp"
 
 namespace dart {
 namespace front_end {
 namespace scanner {
 namespace token {
 /*
-A specific `SimpleToken` implementation representing a keyword token.
+A token implementation representing a keyword.
 */
-class KeywordToken : public SimpleToken {
+class KeywordToken : public Token {
 public:
     explicit KeywordToken(
         const type::TokenType* keyword,
-        std::size_t offset,
+        std::size_t beginOffset,
         CommentToken* precedingComment = nullptr
     )
-        : SimpleToken(keyword, offset, precedingComment) {}
+        : Token{
+              keyword, beginOffset, keyword->lexeme.length(), precedingComment
+          } {
 
-    virtual const keyword::Keyword* getKeyword() const override {
-        return static_cast<const keyword::Keyword*>(getType());
+        init();
     }
-
-    virtual bool isIdentifier() const override {
-        return getKeyword()->isPseudo() || getKeyword()->isBuiltIn();
-    }
-
-    virtual bool isKeyword() const override { return true; }
-
-    virtual bool isKeywordOrIdentifier() const override { return true; }
-
-    // TODO: Implement Object value();
 };
 } // namespace token
 } // namespace scanner
