@@ -9,14 +9,14 @@ class Link {
 public:
     explicit Link(T* head = nullptr, Link<T>* tail = nullptr)
         : head{head},
-          tail{tail} {}
+          tail{tail} { }
 
     bool isEmpty() const { return head == nullptr && tail == nullptr; }
 
     bool isNotEmpty() const { return !isEmpty(); }
 
-    T* head;
-    Link<T>* tail;
+    T* head{nullptr};
+    Link<T>* tail{nullptr};
 };
 
 } // namespace util

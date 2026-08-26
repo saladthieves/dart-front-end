@@ -17,12 +17,12 @@ int run(int argc, const char* argv[]) {
     }
 
     const std::string_view path{argv[1]};
-    auto bytes = util::file::readFileAsBytes(path); 
+    auto bytes = util::file::readFileAsBytes(path);
     if (bytes.empty()) {
         return 65;
     }
 
-    ScannerConfiguration* config = new ScannerConfiguration{};
+    ScannerConfiguration* config{};
 
     LanguageVersionChanged callback =
         [](const Scanner<>* scanner, const token::LanguageVersionToken* token) {
@@ -30,8 +30,6 @@ int run(int argc, const char* argv[]) {
         };
 
     scan(bytes, config, true, &callback, false);
-
-    delete config;
 
     return 0;
 }

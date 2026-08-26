@@ -31,11 +31,11 @@ class AbstractScanner : public Scanner<> {
         const ScannerConfiguration* config,
         bool includeComments,
         const LanguageVersionChanged* languageVersionChanged,
-        token::Token* newEofToken, // TODO: Remember to delete token from heap
+        token::Token* newEofToken,
         std::size_t numberOfBytesHint,
         bool allowLazyStrings = true
     )
-        : lineStarts{new LineStarts(numberOfBytesHint)},
+        : lineStarts{std::make_unique<LineStarts>(numberOfBytesHint)},
           inRecoveryOption{false},
           tokens{newEofToken},
           tail{newEofToken},
@@ -43,7 +43,7 @@ class AbstractScanner : public Scanner<> {
           includeComments{includeComments},
           languageVersionChanged{languageVersionChanged},
           allowLazyStrings{allowLazyStrings},
-          groupingStack{new util::Link<token::BeginToken>()} {
+          groupingStack{std::make_unique<util::Link<token::BeginToken>>()} {
         setConfiguration(config);
     }
 
@@ -59,51 +59,13 @@ public:
               config,
               includeComments,
               languageVersionChanged,
-              token::TokenFactory::eof(0), // TODO: Check for Dart passes in -1
+              token::TokenFactory::eof(0), // Dart passes in -1
               numberOfBytesHint,
               allowLazyStrings
           ) { }
 
-    /*
-virtual ~AbstractScanner() override {
-  // Remove comments
-  if (comments != nullptr) {
-      token::Token* head = comments;
-      while (head != nullptr) {
-          auto* next = head->getNext();
-          delete head;
-          head = next;
-      }
-  }
-
-  // Remove tokens
-  if (tokens != nullptr) {
-      token::Token* head = tokens;
-      while (head != nullptr) {
-          if (head->getPrecedingComments() != nullptr) {
-              token::Token* commentHead = head->getPrecedingComments();
-              while (commentHead != nullptr) {
-                  auto* next = commentHead->getNext();
-                  delete commentHead;
-                  commentHead = next;
-              }
-          }
-          auto* next = head->getNext();
-          delete head;
-          head = next;
-      }
-  }
-
-  // Delete groupingStack
-  delete groupingStack;
-
-  // Delete lineStarts
-  delete lineStarts;
-}
-*/
-
     virtual const LineStarts* getLineStarts() const override {
-        return lineStarts;
+        return lineStarts.get();
     }
 
     virtual bool hasErrors() const override { return _hasErrors; }
@@ -467,7 +429,7 @@ virtual ~AbstractScanner() override {
     token::Token* commentsTail{nullptr};
 
     // TODO: Add docs once we know how this works.
-    util::Link<token::BeginToken>* groupingStack{nullptr};
+    std::unique_ptr<util::Link<token::BeginToken>> groupingStack{nullptr};
 
     bool inRecoveryOption;
 
@@ -480,7 +442,7 @@ private:
     bool enableTripleShift{true};
     bool enableAugmentations{false};
     bool _hasErrors{false};
-    LineStarts* lineStarts{nullptr};
+    std::unique_ptr<LineStarts> lineStarts{nullptr};
 };
 
 } // namespace scanner

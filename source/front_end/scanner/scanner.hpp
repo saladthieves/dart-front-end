@@ -11,7 +11,22 @@
 namespace dart {
 namespace front_end {
 namespace scanner {
-// TODO: Add docs after understanding what this class is used for
+/*
+Stores the line starting position offsets in the source code.
+For example, given the following source code:
+    `// @dart = 3.10`
+    `var name = "Jack";`
+    `int code = 007;`
+
+A `LineStarts` will contain the following position offsets (from the start) to
+represent where each line starts. Each offset is on the first character of the
+line:
+    `0`  - for the first `/` on the first line.
+    `16` - for the `v` on the second line.
+    `35` - for the `i` on the third line.
+
+A `Scanner` inserts a new line after the last one, making the entry at `51`
+*/
 class LineStarts {
 public:
     /*
@@ -35,14 +50,17 @@ public:
 
     // TODO: Disable copying of class
 
-    void add(Int value) { array[arrayLength++] = value; }
+    void add(Int value) { array.push_back(value); }
 
-    std::size_t getLength() const { return arrayLength; }
+    std::vector<Int> array;
 
 private:
-    std::vector<Int> array;
-    std::size_t arrayLength{0};
+    /*
+    Creates and returns an array used to store the line starting offset values.
 
+    The `numberOfBytesHint` value is used to estimate the array size, which is
+    then preallocated in the array.
+    */
     static std::vector<Int> createInitialArray(std::size_t numberOfBytesHint);
 };
 

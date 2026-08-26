@@ -8,9 +8,13 @@ namespace scanner {
 // LineStarts
 auto LineStarts::createInitialArray(std::size_t numberOfBytesHint)
     -> std::vector<Int> {
+
     // Make an assumption of 22 bytes per line.
-    const auto numberOfLines = (numberOfBytesHint / 22) + 1;
-    return std::vector<Int>(numberOfLines);
+    const auto length = (numberOfBytesHint / 22) + 1;
+
+    std::vector<Int> array{};
+    array.reserve(length); // preallocate
+    return array;
 }
 
 // scan()
@@ -25,8 +29,8 @@ void scan(
         bytes, configuration, includeComments, languageVersionChanged,
         allowLazyStrings
     };
-    
-    auto* tokens = scanner.tokenize();  
+
+    auto* tokens = scanner.tokenize();
 
     if (scanner.hasErrors()) {
         log::d("Scanning failed");

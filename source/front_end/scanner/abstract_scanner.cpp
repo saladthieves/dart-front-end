@@ -778,8 +778,7 @@ void AbstractScanner::appendEofToken() {
     while (groupingStack->isNotEmpty()) {
         unmatchedBeginGroup(groupingStack->head);
         auto* head = groupingStack->head;
-        groupingStack = groupingStack->tail;
-        delete head;
+        groupingStack.reset(groupingStack->tail);
     }
 
     appendToken(token::TokenFactory::eof(tokenStart, comments));
@@ -841,8 +840,7 @@ void AbstractScanner::discardOpenLt() {
     while (groupingStack->isNotEmpty() &&
            groupingStack->head->type->kind == LT_TOKEN) {
         auto* head = groupingStack->head;
-        groupingStack = groupingStack->tail;
-        delete head;
+        groupingStack.reset(groupingStack->tail);
     }
 }
 
