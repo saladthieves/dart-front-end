@@ -17,7 +17,10 @@ public:
         CommentToken* precedingComment = nullptr
     )
         : Token{
-              keyword, beginOffset, keyword->lexeme.length(), precedingComment
+              keyword,
+              beginOffset,
+              keyword->lexeme.length(),
+              precedingComment,
           } {
 
         init();

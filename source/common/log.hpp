@@ -80,7 +80,13 @@ inline constexpr void d(std::format_string<T...> string = "", T&&... args) {
 template <typename... T>
 inline constexpr void v(std::format_string<T...> string = "", T&&... args) {
     out(LogLevel::VERBOSE, string, std::forward<T>(args)...);
-} // namespace log
+}
+
+template <typename... T>
+inline constexpr void r(std::format_string<T...> string = "", T&&... args) {
+    out(LogLevel::RAW, string, std::forward<T>(args)...);
+}
+
 } // namespace log
 } // namespace common
 } // namespace dart

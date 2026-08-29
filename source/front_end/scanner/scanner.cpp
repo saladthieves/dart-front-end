@@ -1,5 +1,7 @@
-#include "scanner.hpp"
 #include "common/log.hpp"
+#include "token/token_formatters.hpp"
+
+#include "scanner.hpp"
 #include "utf8_bytes_scanner.hpp"
 
 namespace dart {
@@ -32,13 +34,17 @@ void scan(
 
     auto* tokens = scanner.tokenize();
 
+    while (tokens != nullptr) {
+        dart::log::r("{}", *tokens);
+        tokens = tokens->next();
+    }
+    
     if (scanner.hasErrors()) {
         log::d("Scanning failed");
     } else {
         log::d("Scanning successful");
     }
 }
-
 } // namespace scanner
 } // namespace front_end
 } // namespace dart

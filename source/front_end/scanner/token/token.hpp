@@ -46,7 +46,6 @@ this class with default values (`false` for booleans, `nullptr` for pointers and
 at the cost of increasing the size of each class and assigning (instead of
 initializing) the base fields from derived classes.
 */
-// TODO: Add std::formatter<Token> specialization
 class Token {
 public:
     explicit Token(

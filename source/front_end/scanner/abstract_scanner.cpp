@@ -7,6 +7,8 @@
 #include "token/characters.hpp"
 #include "token/comment_token.hpp"
 #include "token/error_token.hpp"
+#include "token/keyword_token.hpp"
+#include "token/keywords.hpp"
 #include "token/synthetic_token.hpp"
 #include "token/token_constants.hpp"
 #include "token/token_factory.hpp"
@@ -109,8 +111,11 @@ Int AbstractScanner::bigSwitch(Int next) {
         return skipSpaces(); // Skip any white spaces at the start of line
     }
 
+    /*
+    Setting the 0x20 flag ensures that the value of `nextLower` is within the
+    ASCII printable range.
+    */
     const Int nextLower = next | 0x20;
-    // TODO: Find out why next isn't used
     if ($a <= nextLower && nextLower <= $z) {
         if (next == $r) { // A possible raw string, keyword or identifier
             return tokenizeRawStringKeywordOrIdentifier(next);
@@ -237,8 +242,8 @@ Int AbstractScanner::tokenizeMultiLineComment(Int next, std::size_t start) {
 }
 
 Int AbstractScanner::tokenizeSingleLineComment(Int next, std::size_t start) {
-    next = advance();                     // Move past the last '/' in '//'
-    const bool isDartDoc = next == $STAR; // A Dart doc comment with '///'
+    next = advance();                      // Move past the last '/' in '//'
+    const bool isDartDoc = next == $SLASH; // A Dart doc comment with '///'
     return tokenizeSingleLineCommentRest(next, start, isDartDoc);
 }
 
@@ -399,8 +404,76 @@ Int AbstractScanner::tokenizeRawStringKeywordOrIdentifier(Int next) {
 }
 
 Int AbstractScanner::tokenizeKeywordOrIdentifier(Int next, bool allowDollar) {
-    // TODO: Add implementation
-    return advance();
+    keywordState.reset();
+    const auto start = getScanOffset();
+
+    if ($A <= next && next <= $z) {
+        keywordState.next(next);
+        next = advance();
+    }
+
+    while (!keywordState.isNull() && $a <= next && next <= $z) {
+        keywordState.next(next);
+        next = advance();
+    }
+
+    if (keywordState.isNull()) {
+        return tokenizeIdentifier(next, start, allowDollar);
+    }
+
+    const auto* keyword = keywordState.keyword();
+    if (keyword == nullptr) {
+        return tokenizeIdentifier(next, start, allowDollar);
+    }
+
+    if (!enableAugmentations && keyword == &token::keyword::AUGMENT) {
+        return tokenizeIdentifier(next, start, allowDollar);
+    }
+
+    if (($A <= next && next <= $Z) || ($0 <= next && next <= $9) ||
+        next == $_ || (allowDollar && next == $$)) {
+        return tokenizeIdentifier(next, start, allowDollar);
+    } else {
+        appendKeywordToken(keyword);
+        return next;
+    }
+}
+
+Int AbstractScanner::tokenizeIdentifier(
+    Int next, std::size_t start, bool allowDollar
+) {
+    if (allowDollar) {
+        /*
+        Since identifiers can contain a $ sign, the normal case is to allow it.
+        */
+        if (internal_utils::isIdentifierChar(next, true)) {
+            next = passIdentifierCharAllowDollar();
+            appendSubstringToken(&token::type::IDENTIFIER, start, true);
+        } else { // Identifier ends here
+            if (start == getScanOffset()) {
+                return unexpected(next);
+            } else {
+                appendSubstringToken(&token::type::IDENTIFIER, start, true);
+            }
+        }
+    } else {
+        while (true) {
+            if (internal_utils::isIdentifierChar(next, false)) {
+                next = advance();
+            } else { // Identifier ends here.
+                if (start == getScanOffset()) {
+                    return unexpected(next);
+                } else {
+                    appendSubstringToken(
+                        &token::type::IDENTIFIER, start, false
+                    );
+                }
+                break;
+            }
+        }
+    }
+    
+    return next;
 }
 
 Int AbstractScanner::tokenizeString(Int next, std::size_t start, bool isRaw) {
@@ -428,7 +501,7 @@ Int AbstractScanner::tokenizeMultiLineString(
 ) {
     if (isRaw) return tokenizeMultiLineRawString(quoteChar, quoteStart);
 
-    const std::size_t start = quoteStart;
+    std::size_t start = quoteStart;
 
     // Assume only ASCII characters.
     bool asciiOnlyString = true;
@@ -439,7 +512,15 @@ Int AbstractScanner::tokenizeMultiLineString(
 
     while (next != $EOF) { // We haven't hit the end.
         if (next == $$) {
-            // TODO: Add support for interpolation in multiline string
+            if (!asciiOnlyLine) {
+                handleUnicode(unicodeStart);
+            }
+            next = tokenizeStringInterpolation(start, asciiOnlyString);
+            start = getScanOffset();
+            unicodeStart = start;
+            asciiOnlyString = true; // A new string token is created
+            asciiOnlyLine = true;
+            continue;
         }
 
         if (next == quoteChar) {     // Maybe closing quotes, so check further
@@ -565,7 +646,13 @@ Int AbstractScanner::tokenizeSingleLineString(
         if (next == $BACKSLASH) { // Preserve the backlash and proceed.
             next = advance();
         } else if (next == $$) {  // Ignore string interpolation (for now)
-            // TODO: Add support for interpolation in single line string
+            if (!asciiOnly) {
+                handleUnicode(start);
+            }
+            next = tokenizeStringInterpolation(start, asciiOnly);
+            start = getScanOffset();
+            asciiOnly = true;
+            continue;
         }
 
         // Reaching any of these before `quoteStart` is an unterminated string
@@ -669,18 +756,86 @@ Int AbstractScanner::tokenizeMultiLineRawString(
 Int AbstractScanner::tokenizeStringInterpolation(
     std::size_t start, bool asciiOnly
 ) {
-    // TODO: Implement tokenizeStringInterpolation
-    return advance();
+    // TODO: Figure out what's going on here and add it to function docs
+    appendSubstringToken(&token::type::STRING, start, asciiOnly);
+    beginToken();                      // Mark that the '$' starts here.
+    Int next = advance();
+    if (next == $OPEN_CURLY_BRACKET) { // A '${ }' interpolation expression
+        return tokenizeInterpolatedExpression(next);
+    } else {                           // An '$IDENTIFIER' expression
+        return tokenizeInterpolatedIdentifier(next);
+    }
+}
+
+Int AbstractScanner::tokenizeInterpolatedExpression(Int next) { // next = '{'
+    appendBeginGroup(&token::type::STRING_INTERPOLATION_EXPRESSION);
+    if (tokenStart == offsetForCurlyBracketRecoveryStart) {
+        // TODO: Update explanation once we understand what this does
+        discardInterpolation();
+        return advance();
+    }
+
+    beginToken();     // The expression starts here (on the '{')
+    next = advance(); // Move past the '{'
+    while (next != $EOF && next != $STX) { // TODO: Investigate $STX
+        next = bigSwitch(next);
+    }
+
+    if (next == $EOF) {
+        beginToken();
+        discardInterpolation();
+        return next;
+    }
+
+    next = advance(); // Move past the $STX
+    beginToken();     // The string interpolation suffix begins here.
+    return next;
+}
+
+Int AbstractScanner::tokenizeInterpolatedIdentifier(Int next) {
+    appendPrecedenceToken(&token::type::STRING_INTERPOLATION_IDENTIFIER);
+
+    // TODO: Move to external function
+    if ($a <= next && next <= $z || $A <= next && next <= $Z || next == $_) {
+        beginToken(); // Identifier starts here
+
+        /*
+        An interpolation identifier can only contain one '$' (at the start), so
+        pass in `false` for `allowDollar`.
+        */
+        next = tokenizeKeywordOrIdentifier(next, false);
+    } else {
+        beginToken(); // The synthetic identifier starts here.
+        appendSyntheticSubstringToken(
+            &token::type::IDENTIFIER, getScanOffset(), true, ""
+        );
+        prependErrorToken(new token::UnterminatedToken{
+            messages::codes::diag::unexpectedDollarInString(), tokenStart,
+            getStringOffset()
+        });
+    }
+
+    beginToken(); // The string interpolation suffix starts here
+    return next;
+}
+
+void AbstractScanner::appendBeginGroup(const token::type::TokenType* type) {
+    auto* token = new BeginToken{
+        type,
+        tokenStart,
+        type->lexeme.length(),
+        comments,
+    };
+    appendToken(token);
 
     /*
-    appendSubstringToken(&token::type::STRING, start, asciiOnly);
-    beginToken();                      // Mark that '$' begins here.
-    Int next = advance();
-    if (next == $OPEN_CURLY_BRACKET) { // Interpolating an expression
-
-    } else {                           // Interpolating a identifier
-    }
+    The '{', '[', and '${' tokens cannot appear inside type parameters or
+    arguments.
     */
+    if (type != &token::type::LT && type != &token::type::OPEN_PAREN) {
+        discardOpenLt();
+    }
+    groupingStack = groupingStack->prepend(token);
 }
 
 void AbstractScanner::appendDartDoc(
@@ -764,10 +919,20 @@ void AbstractScanner::appendSyntheticSubstringToken(
     );
 }
 
+void
+AbstractScanner::appendKeywordToken(const token::keyword::Keyword* keyword) {
+    // Type parameters and arguments cannot contain 'this'.
+    if (keyword->lexeme == "this") {
+        discardOpenLt();
+    }
+    appendToken(new token::KeywordToken{keyword, tokenStart, comments});
+}
+
 void AbstractScanner::appendEofToken() {
     beginToken();
     discardOpenLt();
 
+    // TODO: Investigate how the code beneath works
     if (groupingStack->isNotEmpty() &&
         groupingStack->head->isA(&token::type::OPEN_CURLY_BRACKET) &&
         groupingStack->tail->isEmpty()) {
@@ -777,8 +942,9 @@ void AbstractScanner::appendEofToken() {
 
     while (groupingStack->isNotEmpty()) {
         unmatchedBeginGroup(groupingStack->head);
-        auto* head = groupingStack->head;
-        groupingStack.reset(groupingStack->tail);
+        auto* tail = groupingStack->tail;
+        delete groupingStack;
+        groupingStack = tail;
     }
 
     appendToken(token::TokenFactory::eof(tokenStart, comments));
@@ -838,9 +1004,24 @@ void AbstractScanner::unterminatedString(
 
 void AbstractScanner::discardOpenLt() {
     while (groupingStack->isNotEmpty() &&
-           groupingStack->head->type->kind == LT_TOKEN) {
-        auto* head = groupingStack->head;
-        groupingStack.reset(groupingStack->tail);
+           groupingStack->head->type == &token::type::LT) {
+        auto* tail = groupingStack->tail;
+        delete groupingStack;
+        groupingStack = tail;
+    }
+}
+
+void AbstractScanner::discardInterpolation() {
+    while (groupingStack->isNotEmpty()) {
+        auto* beginToken = groupingStack->head;
+        unmatchedBeginGroup(beginToken);
+        auto* tail = groupingStack->tail;
+        delete groupingStack;
+        groupingStack = tail;
+
+        if (beginToken->type == &token::type::STRING_INTERPOLATION_EXPRESSION) {
+            break;
+        }
     }
 }
 

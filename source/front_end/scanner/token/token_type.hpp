@@ -51,7 +51,7 @@ public:
           isOperator{isOperator},
           isTopLevelKeyword{isTopLevelKeyword},
           isUserDefinableOperator{isUserDefinableOperator},
-          stringValue{stringValueShouldBeNull ? nullptr : lexeme.data()} {}
+          stringValue{stringValueShouldBeNull ? nullptr : lexeme.data()} { }
 
     /*
     Disable copy constructor - `TokenType` and its derivatives should not be
@@ -90,7 +90,15 @@ public:
     The result of applying such an operator to operands does not depend on the
     order in which they're evaluated.
     */
-    constexpr bool isAssociativeOperator() const;
+    constexpr bool isAssociativeOperator() const {
+        return kind == constants::AMPERSAND_TOKEN ||           //
+               kind == constants::AMPERSAND_AMPERSAND_TOKEN || //
+               kind == constants::BAR_TOKEN ||                 //
+               kind == constants::BAR_BAR_TOKEN ||             //
+               kind == constants::CARET_TOKEN ||               //
+               kind == constants::PLUS_TOKEN ||                //
+               kind == constants::STAR_TOKEN;
+    }
 
     /*
     Returns `true` if this token type represents a built-in keyword, or `false`.
@@ -106,13 +114,19 @@ public:
     Returns `true` if this token type represents an equality operator, `false`
     otherwise.
     */
-    constexpr bool isEqualityOperator() const;
+    constexpr bool isEqualityOperator() const {
+        return kind == constants::BANG_EQ_TOKEN ||
+               kind == constants::EQ_EQ_TOKEN;
+    }
 
     /*
     Returns `true` if this token type represents an increment operator, `false`
     otherwise.
     */
-    constexpr bool isIncrementOperator() const;
+    constexpr bool isIncrementOperator() const {
+        return kind == constants::PLUS_PLUS_TOKEN ||
+               kind == constants::MINUS_MINUS_TOKEN;
+    }
 
     /*
     Returns `true` if this token type represents a keyword, `false` if not.
@@ -138,7 +152,10 @@ public:
     /*
     Returns `true` if this token type is a relational operator, `false` if not.
     */
-    constexpr bool isRelationalOperator() const;
+    constexpr bool isRelationalOperator() const {
+        return kind == constants::LT_TOKEN || kind == constants::LT_EQ_TOKEN ||
+               kind == constants::GT_TOKEN || kind == constants::GT_EQ_TOKEN;
+    }
 
     /*
     Returns `true` if this token type represents a shift operator, `false`
@@ -159,7 +176,12 @@ public:
     /*
     Returns `true` if this token type represents a unary prefix operator.
     */
-    constexpr bool isUnaryPrefixOperator() const;
+    constexpr bool isUnaryPrefixOperator() const {
+        return precedence == precedence::PREFIX ||   //
+               kind == constants::MINUS_TOKEN ||     //
+               kind == constants::PLUS_PLUS_TOKEN || //
+               kind == constants::MINUS_MINUS_TOKEN;
+    }
 
     /*
     Returns `true` if this token type represents a selector operator, `false`

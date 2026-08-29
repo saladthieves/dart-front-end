@@ -115,6 +115,8 @@ public:
         return byteOffset > bytesLengthMinusOne;
     }
 
+    virtual Int passIdentifierCharAllowDollar() override;
+
     /*
     The current offset of the last byte returned by `advance()`.
 

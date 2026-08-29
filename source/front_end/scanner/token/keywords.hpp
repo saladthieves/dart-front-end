@@ -558,8 +558,85 @@ inline constexpr Keyword YIELD = Keyword(
     "YIELD",
     KeywordStyle::PSEUDO
 );
-// clang-format on
 } // namespace keyword
+
+// TODO: Add docs after implementing and understanding `KeywordState`.
+inline constexpr std::array<const keyword::Keyword*, keyword::KEYWORD_COUNT> 
+ALL_KEYWORDS {
+    &keyword::ABSTRACT,
+    &keyword::AS,
+    &keyword::ASSERT,
+    &keyword::ASYNC,
+    &keyword::AUGMENT,
+    &keyword::AWAIT,
+    &keyword::BASE,
+    &keyword::BREAK,
+    &keyword::CASE,
+    &keyword::CATCH,
+    &keyword::CLASS,
+    &keyword::CONST,
+    &keyword::CONTINUE,
+    &keyword::COVARIANT,
+    &keyword::DEFAULT,
+    &keyword::DEFERRED,
+    &keyword::DO,
+    &keyword::DYNAMIC,
+    &keyword::ELSE,
+    &keyword::ENUM,
+    &keyword::EXPORT,
+    &keyword::EXTENDS,
+    &keyword::EXTENSION,
+    &keyword::EXTERNAL,
+    &keyword::FACTORY,
+    &keyword::FALSE,
+    &keyword::FINAL,
+    &keyword::FINALLY,
+    &keyword::FOR,
+    &keyword::FUNCTION,
+    &keyword::GET,
+    &keyword::HIDE,
+    &keyword::IF,
+    &keyword::IMPLEMENTS,
+    &keyword::IMPORT,
+    &keyword::IN,
+    &keyword::INOUT,
+    &keyword::INTERFACE,
+    &keyword::IS,
+    &keyword::LATE,
+    &keyword::LIBRARY,
+    &keyword::MIXIN,
+    &keyword::NATIVE,
+    &keyword::NEW,
+    &keyword::NIL,
+    &keyword::OF,
+    &keyword::ON,
+    &keyword::OPERATOR,
+    &keyword::OUT,
+    &keyword::PART,
+    &keyword::PATCH,
+    &keyword::REQUIRED,
+    &keyword::RETHROW,
+    &keyword::RETURN,
+    &keyword::SEALED,
+    &keyword::SET,
+    &keyword::SHOW,
+    &keyword::SOURCE,
+    &keyword::STATIC,
+    &keyword::SUPER,
+    &keyword::SWITCH,
+    &keyword::SYNC,
+    &keyword::THIS,
+    &keyword::THROW,
+    &keyword::TRUE,
+    &keyword::TRY,
+    &keyword::TYPEDEF,
+    &keyword::VAR,
+    &keyword::VOID,
+    &keyword::WHEN,
+    &keyword::WHILE,
+    &keyword::WITH,
+    &keyword::YIELD
+};
 
 namespace type {
 /*
@@ -731,8 +808,9 @@ inline constexpr std::array<const TokenType*, TOTAL_COUNT> ALL_TOKENTYPES{
     &keyword::WHEN,
     &keyword::WHILE,
     &keyword::WITH,
-    &keyword::YIELD //
+    &keyword::YIELD
 };
+// clang-format on
 } // namespace type
 } // namespace token
 } // namespace scanner

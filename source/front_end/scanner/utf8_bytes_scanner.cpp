@@ -1,5 +1,6 @@
 #include "utf8_bytes_scanner.hpp"
 
+#include "internal_utils.hpp"
 #include "token/characters.hpp"
 #include "token/comment_token.hpp"
 #include "token/synthetic_token.hpp"
@@ -27,6 +28,7 @@ I liked Dart's implementation since it allows looking up the table in constant
 time while saving extra instructions in the loop, so I'm doing the same :)
 */
 inline constexpr std::array<bool, 256> ASCII_TABLE{
+    // TODO: Move to utils
     // clang-format off
     false, false, false, false, false, false, false, false, //   0 - 7
     false, false, true,  false, false, true,  false, false, //   8 - 15 | 10 = $LF, 13 = $CR
@@ -335,6 +337,40 @@ LanguageVersionToken* Utf8BytesScanner::createLanguageVersionToken(
         major,
         minor,
     };
+}
+
+namespace {
+bool (&isIdent)(Int) = internal_utils::isIdentifierCharAllowDollarTableLookup;
+}
+
+// TODO: Add docs
+Int Utf8BytesScanner::passIdentifierCharAllowDollar()  {
+    auto localByteOffset = byteOffset;
+    while (localByteOffset + 10 < bytesLengthMinusOne) {
+        Int next = bytes[++localByteOffset];
+        if (isIdent(next) && //
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset]) &&
+            isIdent(next = bytes[++localByteOffset])) {
+            continue;
+        }
+
+        byteOffset = localByteOffset;
+        return next;
+    }
+
+    while (true) {
+        Int next = advance();
+        if (next == $EOF || !isIdent(next)) {
+            return next;
+        }
+    }
 }
 
 } // namespace scanner

@@ -5,6 +5,8 @@
 #include "token/begin_token.hpp"
 #include "token/comment_token.hpp"
 #include "token/error_token.hpp"
+#include "token/keyword.hpp"
+#include "token/keyword_state.hpp"
 #include "token/string_token.hpp"
 #include "token/token.hpp"
 #include "token/token_factory.hpp"
@@ -43,7 +45,7 @@ class AbstractScanner : public Scanner<> {
           includeComments{includeComments},
           languageVersionChanged{languageVersionChanged},
           allowLazyStrings{allowLazyStrings},
-          groupingStack{std::make_unique<util::Link<token::BeginToken>>()} {
+          groupingStack{new util::Link<token::BeginToken>()} {
         setConfiguration(config);
     }
 
@@ -198,6 +200,9 @@ public:
     Int tokenizeKeywordOrIdentifier(Int next, bool allowDollar);
 
     // TODO: Add docs
+    Int tokenizeIdentifier(Int next, std::size_t start, bool allowDollar);
+
+    // TODO: Add docs
     Int tokenizeString(Int next, std::size_t start, bool isRaw);
 
     // TODO: Add docs
@@ -218,6 +223,12 @@ public:
 
     // TODO: Add docs
     Int tokenizeStringInterpolation(std::size_t start, bool asciiOnly);
+
+    // TODO: Add docs
+    Int tokenizeInterpolatedExpression(Int next);
+
+    // TODO: Add docs
+    Int tokenizeInterpolatedIdentifier(Int next);
 
     // TODO: Add docs
     virtual token::DartDocToken* createDartDocToken(
@@ -255,6 +266,9 @@ public:
         bool asciiOnly,
         std::string_view syntheticChars
     ) = 0;
+
+    // TODO: Add docs
+    void appendBeginGroup(const token::type::TokenType* type);
 
     // TODO: Add docs
     void appendDartDoc(
@@ -302,6 +316,9 @@ public:
     }
 
     // TODO: Add docs
+    void appendKeywordToken(const token::keyword::Keyword* keyword);
+
+    // TODO: Add docs
     void appendEofToken();
 
     /*
@@ -338,6 +355,9 @@ public:
     void discardOpenLt();
 
     // TODO: Add docs
+    void discardInterpolation();
+
+    // TODO: Add docs
     void unmatchedBeginGroup(token::BeginToken* begin);
 
     const token::type::TokenType*
@@ -345,6 +365,9 @@ public:
 
     // TODO: Add docs
     Int unexpected(Int character);
+
+    // TODO: Add docs
+    virtual Int passIdentifierCharAllowDollar() = 0;
 
     /*
     A flag indicating whether character sequences '&&=' and '||=' should be
@@ -410,7 +433,7 @@ public:
 
     token::Token* openBraceWithMissingEndForPossibleRecovery{nullptr};
 
-    std::size_t offsetForCurlyBracketRecoveryStart{0};
+    std::size_t offsetForCurlyBracketRecoveryStart{0};  // Dart uses int?
 
     /*
     A pointer to the stream of comment tokens created by this scanner, before
@@ -429,7 +452,7 @@ public:
     token::Token* commentsTail{nullptr};
 
     // TODO: Add docs once we know how this works.
-    std::unique_ptr<util::Link<token::BeginToken>> groupingStack{nullptr};
+    util::Link<token::BeginToken>* groupingStack{nullptr};
 
     bool inRecoveryOption;
 
@@ -437,6 +460,7 @@ public:
     std::size_t recoveryCount{0};
 
     bool allowLazyStrings;
+    keyword::KeywordState keywordState{};
 
 private:
     bool enableTripleShift{true};

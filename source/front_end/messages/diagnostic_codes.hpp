@@ -146,6 +146,26 @@ inline std::unique_ptr<Message> unmatchedToken(
 }
 
 // TODO: Add docs
+inline std::unique_ptr<Message> unexpectedDollarInString() { 
+    constexpr auto code = Code {
+        "UnexpectedDollarInString",
+        PseudoSharedCode::UNEXPECTED_DOLLAR_IN_STRING
+    };
+
+    constexpr auto problemMessage = "A '$' has a special meaning inside a "
+        "string, and must be followed by an identifier or an expression in "
+        "curly braces ({}).";
+
+    constexpr auto correctionMessage = 
+        "Try adding a backslash (\\) to escape the '$'.";
+
+    const auto arguments = Message::Args {};
+        return std::make_unique<Message>(code, problemMessage, arguments, 
+            correctionMessage
+        );
+}
+
+// TODO: Add docs
 inline std::unique_ptr<Message> unterminatedComment() {
     constexpr auto code = Code {
         "UnterminatedComment",

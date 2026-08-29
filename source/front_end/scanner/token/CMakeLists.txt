@@ -3,7 +3,7 @@ add_library(front_end_scanner_token)
 target_sources(front_end_scanner_token
     PRIVATE
         error_token.cpp
-        token_type.cpp
+        keyword_state.cpp
         token.cpp
 
     PUBLIC

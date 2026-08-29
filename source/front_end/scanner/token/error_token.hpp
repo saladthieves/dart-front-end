@@ -193,7 +193,6 @@ public:
         length = endOffset - beginOffset;
         message = std::move(assertionMessage);
         lexeme = message->problemMessage;
-        
         init();
     }
 };
