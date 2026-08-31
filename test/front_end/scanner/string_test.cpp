@@ -25,47 +25,31 @@ TEST_F(ScannerBase, tokenizeSingleLineRawString_SQ) {
     ASSERT_STREQ(token->lexeme.c_str(), code);
 }
 
-TEST_F(ScannerBase, tokenizeSingleLineRawString_SQ_Unterminated_Newline) {
-    // ARRANGE
-    constexpr auto code = R"(r'Single line raw string.
-    )";
-    auto scanner = getScanner(code);
-
-    // ACT
-    const auto* tokens = scanner.tokenize();
-
-    // ASSERT
-    ASSERT_TRUE(scanner.hasErrors());
-    const auto* error = as<UnterminatedString>(tokens);
-    ASSERT_NE(error, nullptr);
-    ASSERT_TRUE(error->lexeme.contains("String starting with `r'`"));
-
-    const auto* token = as<SyntheticStringToken>(error->next());
-    ASSERT_NE(token, nullptr);
-    ASSERT_STREQ(token->lexeme.c_str(), "r'Single line raw string.'");
-}
-
 TEST_F(ScannerBase, tokenizeSingleLineRawString_SQ_Unterminated) {
     // ARRANGE
-    constexpr auto code = "r'Single line raw string.";
-    auto scanner = getScanner(code);
+    const auto codes = vector{
+        R"(r'Single line raw string.
+    )",
+        "r'Single line raw string.",
+        "r'Single line raw string.\"",
+    };
 
-    // ACT
-    const auto* tokens = scanner.tokenize();
+    for (auto code : codes) {
+        // ACT
+        auto scanner = getScanner(code);
+        const auto* tokens = scanner.tokenize();
 
-    // ASSERT
-    ASSERT_TRUE(scanner.hasErrors());
-    const auto* error = as<UnterminatedString>(tokens);
-    ASSERT_NE(error, nullptr);
-    ASSERT_TRUE(error->lexeme.contains("String starting with `r'`"));
+        // ASSERT
+        ASSERT_TRUE(scanner.hasErrors());
+        const auto* error = as<UnterminatedString>(tokens);
+        ASSERT_NE(error, nullptr);
+        ASSERT_TRUE(error->lexeme.contains("String starting with `r'`"));
 
-    const auto* token = as<SyntheticStringToken>(error->next());
-    ASSERT_NE(token, nullptr);
-    ASSERT_STREQ(token->lexeme.c_str(), "r'Single line raw string.'");
+        const auto* token = as<SyntheticStringToken>(error->next());
+        ASSERT_NE(token, nullptr);
+        ASSERT_TRUE(token->lexeme.contains("r'Single line raw string."));
+    }
 }
-
-// TODO: tokenizeSingleLineRawString_SingleQuote_Invalid (unterminated)
-// TODO: tokenizeSingleLineRawString_SingleQuote_Invalid (wrong quote ending)
 
 TEST_F(ScannerBase, tokenizeSingleLineRawString_DQ) {
     // ARRANGE
@@ -81,12 +65,120 @@ TEST_F(ScannerBase, tokenizeSingleLineRawString_DQ) {
     ASSERT_STREQ(token->lexeme.c_str(), code);
 }
 
-// TODO: tokenizeSingleLineRawString_DoubleQuote_Invalid (unterminated)
-// TODO: tokenizeSingleLineRawString_DoubleQuote_Invalid (wrong quote ending)
+TEST_F(ScannerBase, tokenizeSingleLineRawString_DQ_Unterminated) {
+    // ARRANGE
+    const auto codes = vector{
+        R"(r"Single line raw string.
+    )",
+        "r\"Single line raw string.",
+        "r\"Single line raw string.'",
+    };
 
-// TODO: Test raw string r" "
-// TODO: Test raw string r''' '''
-// TODO: Test raw string r""" """
+    for (auto code : codes) {
+        // ACT
+        auto scanner = getScanner(code);
+        const auto* tokens = scanner.tokenize();
+
+        // ASSERT
+        ASSERT_TRUE(scanner.hasErrors());
+        const auto* error = as<UnterminatedString>(tokens);
+        ASSERT_NE(error, nullptr);
+        ASSERT_TRUE(error->lexeme.contains("String starting with `r\"`"));
+
+        const auto* token = as<SyntheticStringToken>(error->next());
+        ASSERT_NE(token, nullptr);
+        ASSERT_TRUE(token->lexeme.contains("r\"Single line raw string."));
+    }
+}
+
+TEST_F(ScannerBase, tokenizeMultilineRawString_SQ) {
+    // ARRANGE
+    const auto code = R"(
+r'''
+Multiline
+raw
+string.
+''')";
+
+    auto scanner = getScanner(code);
+
+    // ACT
+    const auto* tokens = scanner.tokenize();
+
+    // ASSERT
+    ASSERT_FALSE(scanner.hasErrors());
+    const auto* token = as<StringToken>(tokens);
+    ASSERT_NE(token, nullptr);
+    ASSERT_STREQ(token->lexeme.c_str(), "r'''\nMultiline\nraw\nstring.\n'''");
+}
+
+TEST_F(ScannerBase, tokenizeMultilineRawString_SQ_Unterminated) {
+    // ARRANGE
+    const auto codes = vector{
+        "r'''Multiline raw string.",
+        "r'''Multiline raw string.'",
+        "r'''Multiline raw string.''",
+        "r'''Multiline raw string.\"",
+        "r'''Multiline raw string.\"\"",
+        "r'''Multiline raw string.\"\"\"",
+    };
+
+    for (const auto code : codes) {
+        auto scanner = getScanner(code);
+
+        // ACT
+        const auto* tokens = scanner.tokenize();
+
+        // ASSERT
+        ASSERT_TRUE(scanner.hasErrors());
+        const auto* token = as<UnterminatedString>(tokens);
+    }
+}
+
+TEST_F(ScannerBase, tokenizeMultilineRawString_DQ) {
+    // ARRANGE
+    const auto code = R"(
+r"""
+Multiline
+raw
+string.
+""")";
+
+    auto scanner = getScanner(code);
+
+    // ACT
+    const auto* tokens = scanner.tokenize();
+
+    // ASSERT
+    ASSERT_FALSE(scanner.hasErrors());
+    const auto* token = as<StringToken>(tokens);
+    ASSERT_NE(token, nullptr);
+    ASSERT_STREQ(token->lexeme.c_str(), "r\"\"\"\nMultiline\nraw\nstring.\n\"\"\"");
+}
+
+TEST_F(ScannerBase, tokenizeMultilineRawString_DQ_Unterminated) {
+    // ARRANGE
+    const auto codes = vector{
+        "r\"\"\"Multiline raw string.",
+        "r\"\"\"Multiline raw string.\"",
+        "r\"\"\"Multiline raw string.\"\"",
+        "r\"\"\"Multiline raw string.'",
+        "r\"\"\"Multiline raw string.''",
+        "r\"\"\"Multiline raw string.'''",
+    };
+
+    for (const auto code : codes) {
+        auto scanner = getScanner(code);
+
+        // ACT
+        const auto* tokens = scanner.tokenize();
+
+        // ASSERT
+        ASSERT_TRUE(scanner.hasErrors());
+        const auto* token = as<UnterminatedString>(tokens);
+    }
+}
+
 // TODO: Test normal string ' '
 // TODO: Test normal string " "
 // TODO: Test multiline string ''' '''

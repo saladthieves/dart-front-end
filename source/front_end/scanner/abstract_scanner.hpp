@@ -26,7 +26,8 @@ namespace scanner {
 /*
 Abstract implementation of a scanner.
 
-All other scanner types inherit from this class.
+This class acts as a base class for other scanners and implements the majority
+of the logic common to all scanners.
 */
 class AbstractScanner : public Scanner<> {
     AbstractScanner(
@@ -78,8 +79,11 @@ public:
 
     /*
     Returns `true` when at EOF, `false` otherwise.
+
+    This is typically true if the scanner's current position (`byteOffset`) has
+    gone past the total length of the source code in bytes
+    (`bytesLengthMinusOne`).
     */
-    // TODO: Update docs after implementation
     virtual bool atEndOfFile() const = 0;
 
     /*
@@ -101,11 +105,14 @@ public:
     /*
     Sets the `tokenStart` value to the current string offset.
 
-    This effectively notifies that a new token starts at the current offset.
+    This is called when a new token is going to be created and notifies that it
+    will start at the current offset.
     */
     void beginToken() { tokenStart = getStringOffset(); }
 
-    // TODO: Add docs
+    /*
+    Returns the first token processed by the scanner in the stream.
+    */
     const token::Token* getFirstToken() { return tokens->next(); }
 
     /*
@@ -126,7 +133,10 @@ public:
     */
     virtual Int advance() = 0;
 
-    // TODO: Add docs
+    /*
+    Advances the scanner forward after an error has taken place, returning the
+    next character or an EOF if already at the end.
+    */
     Int advanceAfterError();
 
     // TODO: Add docs
@@ -146,7 +156,7 @@ public:
     (EOL) character or EOF, whichever comes first. An EOL character is either a
     $LF (line feed) or a $CR (carriage return).
 
-    Returns `true` if only ASCII characters were skipped over, `false` if not.
+    Returns `true` if only ASCII characters were encountered, `false` if not.
     */
     virtual bool scanUntilLineEnd() = 0;
 
@@ -196,10 +206,42 @@ public:
     // TODO: Add docs
     Int tokenizeRawStringKeywordOrIdentifier(Int next);
 
-    // TODO: Add docs
+    /*
+    Attempts to tokenize either a keyword or an identifier starting from the
+    `next` character up to (but not including) the last character not part of 
+    an identifier / keyword.
+
+    If the sequence of characters exactly forms a keyword, they're tokenized 
+    into the respective keyword.
+
+    If a non-keyword character is encountered during advancing, then the string
+    of characters is treated as an identifier, given to `tokenizeIdentifier()`
+    which continues the tokenization process to tokenize an identifier.
+
+    `next` - the first potential character of a keyword / identifier.
+    `allowDollar` - whether to allow the dollar sign in identifiers or not.
+
+    Returns the first character after tokenization.
+    */
     Int tokenizeKeywordOrIdentifier(Int next, bool allowDollar);
 
-    // TODO: Add docs
+    /*
+    Tokenizes an identifier token, starting from the `start` offset up to (but 
+    not including) the first character not part of a valid identifier. 
+
+    The `next` value can be the first character of the identifier being 
+    tokenized. It can also be part of a larger string that was first attempted
+    by `tokenizeKeywordOrIdentifier()` for keyword tokenization.
+
+    For example, if `tokenizeKeywordOrIdentifier()` attempts to tokenize the
+    string `abstracted` as a keyword, it would not match any keywords. The 
+    string would instead be passed to `tokenizeIdentifier` with `next` pointing 
+    on letter `e` - the first letter encountered not matching the keyword 
+    `abstract`. Similarly with the string `awaited` - `next` would also be 
+    positioned on `e`.
+
+    Returns the first character after tokenization.
+    */
     Int tokenizeIdentifier(Int next, std::size_t start, bool allowDollar);
 
     // TODO: Add docs
@@ -250,7 +292,12 @@ public:
         std::size_t start, dart::u8 major, dart::u8 minor
     ) = 0;
 
-    // TODO: Add docs
+    /*
+    Creates and returns a substring `StringToken` object.
+
+    The substring begins at the `start` offset and stops at 
+    `byteOffset + extraOffset` value.
+    */
     virtual token::StringToken* createSubstringToken(
         const token::type::TokenType* type,
         std::size_t start,
@@ -298,7 +345,7 @@ public:
         std::size_t extraOffset = 0
     );
 
-    // TODO: Add docs
+    // TODO: Add docs once all uses are understood
     void appendSyntheticSubstringToken(
         const token::type::TokenType* type,
         std::size_t start,
@@ -341,7 +388,35 @@ public:
     */
     void prependErrorToken(token::ErrorToken* errorToken);
 
-    // TODO: Add docs
+    /*
+    Reports an unterminated string.
+
+    A string is unterminated if starts with an opening quote but does not end
+    with a closing (or valid) quote. This applies to both single and multiline
+    strings and their raw versions.
+
+    Examples:
+        - `"Hello, world`         // Missing closing `"`
+        - `'Hello, world`         // Missing closing `'`
+        - `'Hello, world"`        // Invalid closing `"` instead of `'`
+        - `"""Hello, world ''`    // Invalid closing `''` instead of `"""`
+        - `r'''Hello, world"""`   // Invalid closing `"""` instead of `'''`
+
+    When an unterminated string is encountered, the scanner recovers from this
+    error by creating a (properly) terminated version of the string and then
+    appending it to the list of tokens as a synthetic string token
+    (`SyntheticStringToken`).
+
+    The error is then prepended to the list of error tokens as an
+    `UnterminatedString` token.
+
+    `quoteChar` - the quotation character of the string (' or ").
+    `quoteStart` - the start of the quotation mark.
+    `start` - the start of the string (usually same as `quoteStart`).
+    `asciiOnly` - whether the string contains only ASCII characters or not.
+    `isMultiLine` - whether the string is multiline or not.
+    `isRaw` - whether the string is a raw string or not.
+    */
     void unterminatedString(
         Int quoteChar,
         std::size_t quoteStart,
@@ -360,6 +435,7 @@ public:
     // TODO: Add docs
     void unmatchedBeginGroup(token::BeginToken* begin);
 
+    // TODO: Add docs
     const token::type::TokenType*
     closeBraceInfoFor(const token::BeginToken* token) const;
 
@@ -377,8 +453,12 @@ public:
     static inline bool LAZY_ASSIGNMENT_ENABLED{false};
 
     /*
-    Whether to include comments in the tokenization process (`true`) or not
-    (`false`).
+    Whether comment tokens are included in the stream of tokens (`true`) or if
+    they should be ignored (`false`).
+
+    The scanner still recognizes comment tokens so that they can be handled
+    accordingly, but this flag indicates whether they should be assigned to a
+    parent `Token` (if `true`) or not (if `false`).
     */
     bool includeComments;
 
@@ -400,11 +480,14 @@ public:
 
     /*
     A pointer to the token of streams created by the scanner as it tokenizes the
-    data. This first token is internal / specific to the scanner, and is neither
-    exposed to clients nor from the source code.
+    source code.
 
-    The actual first token from the source code can be obtained via the
-    `getFirstToken()` call.
+    The very first token is an EOF token, which acts as a boundary marker / sign
+    of where the stream begins, and is never returned back to the callers.
+    The actual start of tokens processed by the scanner can be reached with
+    `getFirstToken()`.
+
+    This defaults to an EOF token when the scanner is created.
     */
     token::Token* tokens{nullptr};
 
@@ -412,8 +495,7 @@ public:
     A pointer to the most recently scanned token that's also been appended to
     the end of the token stream.
 
-    This may be a regular token, or an error token (in the case there was an
-    error).
+    This defaults to an EOF token when the scanner is created.
     */
     token::Token* tail{nullptr};
 
@@ -427,22 +509,24 @@ public:
     If another error token needs to be inserted into the stream, it's inserted
     between `errorTail` and `errorTail->getNext()` such that it links to both.
 
+    This defaults to an EOF token when the scanner is created.
+
     See `prependErrorToken()` for more.
     */
     token::Token* errorTail{nullptr};
 
     token::Token* openBraceWithMissingEndForPossibleRecovery{nullptr};
 
-    std::size_t offsetForCurlyBracketRecoveryStart{0};  // Dart uses int?
+    std::size_t offsetForCurlyBracketRecoveryStart{0}; // Dart uses int?
 
     /*
     A pointer to the stream of comment tokens created by this scanner, before
-    they are assigned to a non-comment token via the
-    `SimpleToken::precedingComments` field. Once added to a non-comment token,
-    this field is set to `nullptr` for more comments.
+    they are assigned to a non-comment token via the `Token::precedingComments`
+    field. Once the comment stream is added to a non-comment token, this field
+    is reset back to `nullptr`.
 
-    If there are no comment tokens (or the field `includeComments` is false),
-    this field is `nullptr`.
+    If comment tokenization is disabled (`includeComments` is set to `false`) or
+    the source code contains no comments, then this field remains `nullptr`.
     */
     token::CommentToken* comments{nullptr};
 
@@ -460,6 +544,11 @@ public:
     std::size_t recoveryCount{0};
 
     bool allowLazyStrings;
+
+    /*
+    The current keyword state, used to identify whether a series of characters
+    match a keyword or an identifier.
+    */
     keyword::KeywordState keywordState{};
 
 private:

@@ -171,7 +171,7 @@ Int AbstractScanner::tokenizeMultiLineComment(Int next, std::size_t start) {
         /*
         If we hit an EOF before the multiline comment is terminated with `✶/`,
         it's an error. This applies to both single and multilevel (nested)
-        multiline comments.
+        comments.
         */
         if (next == $EOF) {
             if (!asciiOnlyLines) {
@@ -411,29 +411,60 @@ Int AbstractScanner::tokenizeKeywordOrIdentifier(Int next, bool allowDollar) {
     keywordState.reset();
     const auto start = getScanOffset();
 
+    /*
+    Initialize the keyword state with the `next` character, allowing for
+    uppercase letters. This has the effect of positioning keyword state on the
+    first letter of the first possible keyword.
+    */
     if ($A <= next && next <= $z) {
         keywordState.next(next);
         next = advance();
     }
 
+    /*
+    Keep iterating over each character as long as:
+        a) It's in the correct sequence of the letters of a possible keyword.
+           AND
+        b) It's a lowercase letter.
+    */
     while (!keywordState.isNull() && $a <= next && next <= $z) {
         keywordState.next(next);
         next = advance();
     }
 
+    /*
+    `keywordState.isNull()` returned `true` first ((a) from above).
+
+    This happens if a new character (not part of the letters of a possible
+    keyword) is encountered.
+
+    For example, the string `abstracted` would cause the call to
+    `keywordState.isNull()` to return `true` after reaching `e`, since that
+    character is the first one encountered not part of the sequence forming a
+    valid keyword. So it can only be an identifier.
+    */
     if (keywordState.isNull()) {
         return tokenizeIdentifier(next, start, allowDollar);
     }
 
     const auto* keyword = keywordState.keyword();
-    if (keyword == nullptr) {
+    if (keyword == nullptr) { // Still an identifier, not a keyword.
         return tokenizeIdentifier(next, start, allowDollar);
     }
 
+    /*
+    If the augmentation feature is disabled, then treat the `augment` keyword as
+    an identifier.
+    */
     if (!enableAugmentations && keyword == &token::keyword::AUGMENT) {
         return tokenizeIdentifier(next, start, allowDollar);
     }
 
+    /*
+    If the character immediately after the keyword characters is an uppercase
+    letter, a numeric digit, an underscore, or a $ sign (if allowed), then it's
+    an identifier since a keyword can't be any of those things.
+    */
     if (($A <= next && next <= $Z) || ($0 <= next && next <= $9) ||
         next == $_ || (allowDollar && next == $$)) {
         return tokenizeIdentifier(next, start, allowDollar);
@@ -702,6 +733,7 @@ Int AbstractScanner::tokenizeMultiLineRawString(
 
     std::size_t unicodeStart = quoteStart;
     Int next = advance(); // Move past the last ' or " of the three.
+    bool success = true;
 
     const auto loop = [&] -> Int {
         while (next != $EOF) {          // We're not yet at the end.
@@ -718,7 +750,10 @@ Int AbstractScanner::tokenizeMultiLineRawString(
                     asciiOnlyLine = false;
                 }
                 next = advance();
-                if (next == $EOF) return $EOF; // Exit lambda
+                if (next == $EOF) { // Exit the lambda
+                    success = false;
+                    return $EOF;
+                }
             }
             // On first closing quotation mark of the string
 
@@ -739,10 +774,12 @@ Int AbstractScanner::tokenizeMultiLineRawString(
             }
         }
 
+        success = false;
         return next;
     };
 
     next = loop();
+    if (success) return next;
 
     if (!asciiOnlyLine) {
         handleUnicode(unicodeStart);
@@ -933,7 +970,7 @@ AbstractScanner::appendKeywordToken(const token::keyword::Keyword* keyword) {
 }
 
 void AbstractScanner::appendEofToken() {
-    beginToken();
+    beginToken(); // The closing EOF token begins after everything else
     discardOpenLt();
 
     // TODO: Investigate how the code beneath works

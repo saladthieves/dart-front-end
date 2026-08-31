@@ -353,7 +353,6 @@ namespace {
 bool (&isIdent)(Int) = internal_utils::isIdentifierCharAllowDollarTableLookup;
 }
 
-// TODO: Add docs
 Int Utf8BytesScanner::passIdentifierCharAllowDollar() {
     auto localByteOffset = byteOffset;
     while (localByteOffset + 10 < bytesLengthMinusOne) {

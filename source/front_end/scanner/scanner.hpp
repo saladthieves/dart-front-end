@@ -18,7 +18,7 @@ For example, given the following source code:
     `var name = "Jack";`
     `int code = 007;`
 
-A `LineStarts` will contain the following position offsets (from the start) to
+A `LineStarts` would contain the following position offsets (from the start) to
 represent where each line starts. Each offset is on the first character of the
 line:
     `0`  - for the first `/` on the first line.
@@ -119,7 +119,7 @@ public:
     virtual ~Scanner() = default;
 
     /*
-    Returns `true` if there was an error during the tokenization process, or
+    Returns `true` if there were errors during the tokenization process, or
     `false` if not.
     */
     virtual bool hasErrors() const = 0;
@@ -138,7 +138,8 @@ public:
     virtual void setConfiguration(const ScannerConfiguration* config) = 0;
 
     /*
-    Processes the tokens based on the provided configuration.
+    Processes the tokens based on the provided configuration, and returns the 
+    first processed token in the stream.
     */
     virtual const token::Token* tokenize() = 0;
 };
@@ -150,7 +151,7 @@ using LanguageVersionChanged = std::function<void(
     const Scanner<>* scanner, const token::LanguageVersionToken* languageVersion
 )>;
 
-// TODO: Add docs
+// TODO: Add docs after completing implementation
 void scan(
     std::span<dart::u8> bytes,
     ScannerConfiguration* configuration,

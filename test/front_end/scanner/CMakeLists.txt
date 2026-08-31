@@ -5,6 +5,7 @@ target_sources(front_end_scanner_test
         comments_test.cpp
         scanner_test.cpp
         string_test.cpp
+        token/keyword_state_test.cpp
     
     PRIVATE
         FILE_SET HEADERS
