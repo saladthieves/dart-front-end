@@ -154,13 +154,20 @@ private:
 // TODO: Add docs
 class UnterminatedString : public ErrorToken {
 public:
-    explicit UnterminatedString(std::size_t beginOffset, std::string_view start)
-        : ErrorToken{beginOffset} {
+    explicit UnterminatedString(
+        std::size_t beginOffset,
+        std::string_view start,
+        std::size_t stringOffset
+    )
+        : ErrorToken{beginOffset},
+          stringOffset{stringOffset} {
         message = diag::unterminatedString(start, closeQuoteFor(start));
         lexeme = message->problemMessage;
 
         init();
     }
+
+    std::size_t stringOffset;
 };
 
 // TODO: Add docs

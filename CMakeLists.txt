@@ -9,3 +9,8 @@ project(
 )
 
 add_subdirectory(source)
+
+if(DFE_ENABLE_TESTING)
+    include(cmake/modules.cmake)
+    add_subdirectory(test)
+endif()

@@ -16,7 +16,7 @@
         {
             "name": "config-ninja",
             "inherits": "config",
-            "generator": "Unix Makefiles",
+            "generator": "Ninja",
             "hidden": true
         },
         {
@@ -26,6 +26,16 @@
             "description": "Configuration for Ninja generator debug builds.",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "config-ninja-test",
+            "inherits": "config-ninja",
+            "displayName": "Ninja Test Config",
+            "description": "Configuration for Ninja generator test builds.",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "DFE_ENABLE_TESTING": "ON"
             }
         }
     ],
@@ -37,6 +47,15 @@
             "configurePreset": "config-ninja-debug",
             "targets": [
                 "dart_front_end"
+            ]
+        },
+        {
+            "name": "build-ninja-test",
+            "displayName": "Build Ninja Test",
+            "description": "Builds the Dart compiler front-end test in debug mode with Ninja.",
+            "configurePreset": "config-ninja-test",
+            "targets": [
+                "dart_front_end_test"
             ]
         }
     ]

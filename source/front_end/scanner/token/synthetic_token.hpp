@@ -3,11 +3,14 @@
 #include "begin_token.hpp"
 #include "keyword_token.hpp"
 #include "string_token.hpp"
+#include "token/token_type.hpp"
 
 namespace dart {
 namespace front_end {
 namespace scanner {
 namespace token {
+// TODO: Update docs
+
 /*
 The base class for synthetic tokens.
 
@@ -89,9 +92,10 @@ public:
     explicit SyntheticStringToken(
         const type::TokenType* type,
         std::size_t beginOffset,
-        std::string_view stringValue
+        std::string_view stringValue,
+        std::size_t length = 0
     )
-        : StringToken{type, beginOffset, stringValue, 0} { }
+        : StringToken{type, beginOffset, stringValue, length} { }
 };
 } // namespace token
 } // namespace scanner

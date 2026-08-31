@@ -286,10 +286,20 @@ StringToken* Utf8BytesScanner::createSyntheticSubstringToken(
     bool asciiOnly,
     std::string_view syntheticChars
 ) {
+    auto stringValue = std::string{
+        bytes.begin() + start,
+        bytes.begin() + byteOffset,
+    };
+    
+    if (syntheticChars.length() != 0) {
+        stringValue += syntheticChars;
+    }
+
     return new token::SyntheticStringToken{
         type,
         start,
-        syntheticChars,
+        stringValue,
+        stringValue.length() - syntheticChars.length(),
     };
 }
 
@@ -344,7 +354,7 @@ bool (&isIdent)(Int) = internal_utils::isIdentifierCharAllowDollarTableLookup;
 }
 
 // TODO: Add docs
-Int Utf8BytesScanner::passIdentifierCharAllowDollar()  {
+Int Utf8BytesScanner::passIdentifierCharAllowDollar() {
     auto localByteOffset = byteOffset;
     while (localByteOffset + 10 < bytesLengthMinusOne) {
         Int next = bytes[++localByteOffset];

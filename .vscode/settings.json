@@ -1,9 +1,11 @@
 {
     "binaryName": "dart_front_end",
+    "testBinaryName": "dart_front_end_test",
     "cSpell.words": [
         "BACKPING",
         "Interner",
-        "Noexcept"
+        "Noexcept",
+        "STREQ"
     ],
     "better-todo-tree.highlights.defaultHighlight": {
         "background": "#12520a"

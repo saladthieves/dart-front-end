@@ -162,13 +162,17 @@ Int AbstractScanner::tokenizeMultiLineComment(Int next, std::size_t start) {
     bool asciiOnlyComment = true;
     bool asciiOnlyLines = true;
     std::size_t unicodeStart = start;
-    dart::u8 nesting = 1;
+    dart::u16 nesting = 1;
 
     next = advance();                     // Move past the '*' in '/*'
     const bool isDartDoc = next == $STAR; // A Dart doc comment with '/**'
 
     while (true) {
-        // We hit an EOF before comment ending - it's an unterminated comment.
+        /*
+        If we hit an EOF before the multiline comment is terminated with `✶/`,
+        it's an error. This applies to both single and multilevel (nested)
+        multiline comments.
+        */
         if (next == $EOF) {
             if (!asciiOnlyLines) {
                 handleUnicode(unicodeStart);
@@ -472,7 +476,7 @@ Int AbstractScanner::tokenizeIdentifier(
             }
         }
     }
-    
+
     return next;
 }
 
@@ -629,8 +633,8 @@ Int AbstractScanner::tokenizeSingleLineRawString(
     // We hit an EOF in the `while` loop before the string could terminate.
     unterminatedString(
         quoteChar, quoteStart, quoteStart, asciiOnly,
-        true, // isMultiline
-        true  // isRaw
+        false, // isMultiline
+        true   // isRaw
     );
 
     return next;
@@ -987,10 +991,10 @@ void AbstractScanner::unterminatedString(
     bool isMultiline,
     bool isRaw
 ) {
+    const auto c = static_cast<char>(quoteChar);
     const auto suffix =
-        isMultiline ? std::format("{}{}{}", quoteChar, quoteChar, quoteChar)
-                    : std::format("{}", quoteChar);
-    const auto prefix = isRaw ? std::format("${}", suffix) : suffix;
+        isMultiline ? std::format("{}{}{}", c, c, c) : std::format("{}", c);
+    const auto prefix = isRaw ? std::format("r{}", suffix) : suffix;
 
     appendSyntheticSubstringToken(
         &token::type::STRING, start, asciiOnly, suffix
@@ -999,7 +1003,11 @@ void AbstractScanner::unterminatedString(
     // Report the error on a visible token
     const auto offset = getStringOffset();
     std::size_t errorStart = tokenStart < offset ? tokenStart : quoteStart;
-    prependErrorToken(new token::UnterminatedString(errorStart, prefix));
+    prependErrorToken(new token::UnterminatedString{
+        errorStart,
+        prefix,
+        offset,
+    });
 }
 
 void AbstractScanner::discardOpenLt() {

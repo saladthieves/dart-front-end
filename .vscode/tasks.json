@@ -40,6 +40,44 @@
         },
         {
             "type": "shell",
+            "label": "config-ninja-test",
+            "detail": "Runs cmake with the config-ninja-test preset.",
+            "group": "build",
+            "hide": true,
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "config-ninja-test"
+            ]
+        },
+        {
+            "type": "shell",
+            "label": "build-ninja-test",
+            "detail": "Builds the dart_front_end_test target with Ninja in Debug mode.",
+            "group": "build",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--preset",
+                "build-ninja-test"
+            ]
+        },
+                {
+            "type": "shell",
+            "label": "build-ninja-test-clean",
+            "detail": "Cleans and rebuilds the dart_front_end_test target with Ninja in Debug mode.",
+            "group": "build",
+            "dependsOn": [
+                "clean",
+                "config-ninja-test",
+                "build-ninja-test"
+            ],
+            "dependsOrder": "sequence"
+        },
+
+        {
+            "type": "shell",
             "label": "clean",
             "detail": "Removes all build binaries and cache files.",
             "group": "build",
@@ -49,7 +87,8 @@
                 "-rf",
                 "build/CMakeCache.txt",
                 "build/CMakeFiles",
-                "build/dart_front_end"
+                "build/dart_front_end",
+                "build/dart_front_end_test"
             ]
         }
     ]

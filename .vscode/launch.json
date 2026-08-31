@@ -30,6 +30,29 @@
             "args": [],
             "internalConsoleOptions": "neverOpen",
             "preLaunchTask": "build-ninja-debug-clean"
+        },
+        {
+            "name": "Test",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/build/${config:testBinaryName}",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Build > Test",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/build/${config:testBinaryName}",
+            "internalConsoleOptions": "neverOpen",
+            "preLaunchTask": "build-ninja-test"
+        },
+        {
+            "name": "Clean > Build > Test",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/build/${config:testBinaryName}",
+            "internalConsoleOptions": "neverOpen",
+            "preLaunchTask": "build-ninja-test-clean"
         }
     ]
 }

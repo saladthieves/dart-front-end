@@ -17,7 +17,6 @@ target_sources(front_end_scanner
 target_link_libraries(front_end_scanner
     PRIVATE
         common
-        front_end_base
         front_end_scanner_token
         util
 )
